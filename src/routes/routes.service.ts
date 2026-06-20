@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Route } from './route.entity';
@@ -18,5 +18,11 @@ export class RoutesService {
 
   async findAll(): Promise<Route[]> {
     return this.routeRepository.find({ order: { createdAt: 'DESC' } });
+  }
+
+  async findOne(id: string): Promise<Route> {
+    const route = await this.routeRepository.findOne({ where: { id } });
+    if (!route) throw new NotFoundException('Route non trouvée');
+    return route;
   }
 }
