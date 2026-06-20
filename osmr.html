@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Collecteur Multi-points & Export JSON</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body { font-family: sans-serif; margin: 20px; }
+        #map { height: 60vh; width: 100%; border: 2px solid #ddd; margin: 15px 0; }
+        .controls { background: #f4f4f4; padding: 15px; border-radius: 8px; }
+        button { padding: 10px 15px; cursor: pointer; border: none; border-radius: 4px; margin-right: 5px; }
+        .btn-calc { background: #28a745; color: white; }
+        .btn-export { background: #ffc107; }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <h2>Routage & Export : Fianarantsoa</h2>
+        <button class="btn-calc" onclick="fetchRoute()">Calculer la Route</button>
+        <button class="btn-export" id="exportBtn" onclick="exportJSON()" disabled>Exporter en JSON</button>
+        <button onclick="location.reload()">Réinitialiser</button>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([-21.4546, 47.0875], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        let points = [];
+        let routeLayer = null;
+        let lastGeoJSON = null; 
+        const API_KEY = '5b3ce3597851110001cf6248f7be3c52a112485db4cb2a9e741b567b';
+
+        map.on('click', function(e) {
+            const coord = [e.latlng.lng, e.latlng.lat];
+            points.push(coord);
+            L.marker([e.latlng.lat, e.latlng.lng]).addTo(map).bindPopup("Point " + points.length);
+        });
+
+        async function fetchRoute() {
+            if (points.length < 2) return alert("Ajoutez au moins 2 points.");
+            
+            const url = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': API_KEY,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ coordinates: points })
+            });
+
+            lastGeoJSON = await response.json();
+
+            if (lastGeoJSON.features) {
+                if (routeLayer) map.removeLayer(routeLayer);
+                routeLayer = L.geoJSON(lastGeoJSON, { style: { color: 'red', weight: 5 } }).addTo(map);
+                map.fitBounds(routeLayer.getBounds());
+                document.getElementById('exportBtn').disabled = false;
+            } else {
+                alert("Erreur de calcul.");
+            }
+        }
+
+        function exportJSON() {
+            if (!lastGeoJSON) return;
+            const blob = new Blob([JSON.stringify(lastGeoJSON)], {type: "application/json"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "itineraire_fianarantsoa.json";
+            a.click();
+        }
+    </script>
+</body>
+</html>

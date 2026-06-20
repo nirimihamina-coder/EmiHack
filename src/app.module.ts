@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ReportsModule } from './reports/reports.module';
+import { RoutesModule } from './routes/routes.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ReportsModule } from './reports/reports.module';
     }),
     ScheduleModule.forRoot(),
     ReportsModule,
+    RoutesModule,
   ],
 })
 export class AppModule {}
