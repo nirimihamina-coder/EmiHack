@@ -22,6 +22,108 @@ type TabKey = 'form' | 'results';
 type RightPanel = 'list' | 'detail';
 type SelectingPoint = 'A' | 'B' | null;
 
+// ============================================================
+// 🔑 Fusion des segments en anneaux fermés (correction de la limite)
+// ============================================================
+function mergeSegmentsIntoRings(segments: [number, number][][]): [number, number][][] {
+  if (segments.length === 0) return [];
+  const remaining: [number, number][][] = segments.map((s) => [...s]);
+  const rings: [number, number][][] = [];
+
+  const eq = (a: [number, number], b: [number, number]) =>
+    Math.abs(a[0] - b[0]) < 1e-6 && Math.abs(a[1] - b[1]) < 1e-6;
+
+  while (remaining.length > 0) {
+    let ring: [number, number][] = [...remaining.shift()!];
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let i = 0; i < remaining.length; i++) {
+        const seg = remaining[i];
+        const ringEnd = ring[ring.length - 1];
+        const segStart = seg[0];
+        const segEnd = seg[seg.length - 1];
+        const ringStart = ring[0];
+
+        if (eq(ringEnd, segStart)) {
+          ring = [...ring, ...seg.slice(1)];
+          remaining.splice(i, 1);
+          changed = true;
+          break;
+        } else if (eq(ringEnd, segEnd)) {
+          ring = [...ring, ...[...seg].reverse().slice(1)];
+          remaining.splice(i, 1);
+          changed = true;
+          break;
+        } else if (eq(ringStart, segEnd)) {
+          ring = [...seg, ...ring.slice(1)];
+          remaining.splice(i, 1);
+          changed = true;
+          break;
+        } else if (eq(ringStart, segStart)) {
+          ring = [...[...seg].reverse(), ...ring.slice(1)];
+          remaining.splice(i, 1);
+          changed = true;
+          break;
+        }
+      }
+    }
+    const first = ring[0];
+    const last = ring[ring.length - 1];
+    if (!eq(first, last)) ring.push(first);
+    if (ring.length >= 4) rings.push(ring);
+  }
+  return rings;
+}
+
+// ============================================================
+// 🔑 Extraction des segments depuis les données Overpass
+// ============================================================
+interface OverpassElement {
+  type: string;
+  geometry?: { lat: number; lon: number }[];
+  members?: { type: string; geometry?: { lat: number; lon: number }[] }[];
+}
+interface OverpassResponse {
+  elements: OverpassElement[];
+}
+
+function extractSegments(data: OverpassResponse): [number, number][][] {
+  const segments: [number, number][][] = [];
+  if (!data?.elements) return segments;
+
+  data.elements.forEach((el) => {
+    if (el.type === 'way' && el.geometry && el.geometry.length > 1) {
+      segments.push(el.geometry.map((g) => [g.lat, g.lon] as [number, number]));
+    }
+    if (el.type === 'relation' && el.members) {
+      el.members.forEach((member) => {
+        if (member.type === 'way' && member.geometry && member.geometry.length > 1) {
+          segments.push(member.geometry.map((g) => [g.lat, g.lon] as [number, number]));
+        }
+      });
+    }
+  });
+  return segments;
+}
+
+// ============================================================
+// 🔑 Construction d'un anneau "monde avec trous" pour le masque
+// ============================================================
+const WORLD_BOUNDS: [number, number][] = [
+  [-90, -180],
+  [-90, 180],
+  [90, 180],
+  [90, -180],
+];
+
+function buildMaskRings(rings: [number, number][][]) {
+  if (rings.length === 0) return null;
+  // L.polygon accepte un tableau de tableaux : le 1er est l'anneau extérieur,
+  // les suivants sont des trous. Cela crée un masque correct.
+  return [WORLD_BOUNDS, ...rings] as [number, number][][];
+}
+
 export default function DeviationPage() {
   const [tab, setTab] = useState<TabKey>('form');
   const [pointA, setPointA] = useState('');
@@ -35,7 +137,6 @@ export default function DeviationPage() {
   const [rightPanel, setRightPanel] = useState<RightPanel>('list');
   const [selectingPoint, setSelectingPoint] = useState<SelectingPoint>(null);
   const [locating, setLocating] = useState(false);
-  const [formMapReady, setFormMapReady] = useState(false);
 
   const mapElRef = useRef<HTMLDivElement>(null);
   const formMapElRef = useRef<HTMLDivElement>(null);
@@ -44,12 +145,19 @@ export default function DeviationPage() {
   const routesLayerRef = useRef<L.LayerGroup | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const boundaryLayerRef = useRef<L.LayerGroup | null>(null);
+  const formBoundaryLayerRef = useRef<L.LayerGroup | null>(null);
   const formMarkersRef = useRef<L.LayerGroup | null>(null);
-  const formClickMarkerRef = useRef<L.Marker | null>(null);
+
+  const selectingPointRef = useRef<SelectingPoint>(null);
+  const markerARef = useRef<L.Marker | null>(null);
+  const markerBRef = useRef<L.Marker | null>(null);
+
+  useEffect(() => {
+    selectingPointRef.current = selectingPoint;
+  }, [selectingPoint]);
 
   const canSearch = pointA.trim().length > 0 && pointB.trim().length > 0;
 
-  // Reverse geocoding via Nominatim (gratuit)
   const reverseGeocode = async (lat: number, lon: number): Promise<string> => {
     try {
       const res = await fetch(
@@ -58,7 +166,6 @@ export default function DeviationPage() {
       );
       const data = await res.json();
       if (data.display_name) {
-        // On prend une version courte
         const addr = data.address;
         const parts = [addr.road, addr.suburb, addr.neighbourhood, addr.city].filter(Boolean);
         return parts.length > 0 ? parts.join(', ') : data.display_name;
@@ -69,18 +176,41 @@ export default function DeviationPage() {
     }
   };
 
-  // Met à jour un point avec coordonnées + adresse
   const setPointWithGeocode = async (point: 'A' | 'B', lat: number, lon: number) => {
     const coordStr = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
     const setter = point === 'A' ? setPointA : setPointB;
-    // On met d'abord les coordonnées, puis on remplace par l'adresse si trouvée
     setter(coordStr);
     const address = await reverseGeocode(lat, lon);
     setter(address);
   };
 
-  // Ma position : utilise la géolocalisation du navigateur
-  const handleUseMyLocation = async () => {
+  const placeMarkerOnFormMap = (point: 'A' | 'B', lat: number, lng: number) => {
+    if (!formMapRef.current || !formMarkersRef.current) return;
+
+    if (point === 'A' && markerARef.current) {
+      formMapRef.current.removeLayer(markerARef.current);
+      markerARef.current = null;
+    }
+    if (point === 'B' && markerBRef.current) {
+      formMapRef.current.removeLayer(markerBRef.current);
+      markerBRef.current = null;
+    }
+
+    const color = point === 'A' ? '#22c55e' : '#ef4444';
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="background:${color};color:white;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3)">${point}</div>`,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16]
+    });
+
+    const marker = L.marker([lat, lng], { icon }).addTo(formMarkersRef.current);
+
+    if (point === 'A') markerARef.current = marker;
+    else markerBRef.current = marker;
+  };
+
+  const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
       alert("La géolocalisation n'est pas supportée par votre navigateur.");
       return;
@@ -90,20 +220,9 @@ export default function DeviationPage() {
       async (position) => {
         const { latitude, longitude } = position.coords;
         await setPointWithGeocode('A', latitude, longitude);
-        // Centre la carte du formulaire sur la position
+        placeMarkerOnFormMap('A', latitude, longitude);
         if (formMapRef.current) {
           formMapRef.current.setView([latitude, longitude], 16);
-          // Ajoute un marqueur bleu pulsant
-          if (formClickMarkerRef.current) {
-            formMapRef.current.removeLayer(formClickMarkerRef.current);
-          }
-          const icon = L.divIcon({
-            className: '',
-            html: `<div style="background:#3b82f6;color:white;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid white;box-shadow:0 0 0 4px rgba(59,130,246,0.3),0 2px 8px rgba(0,0,0,0.3)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="3"/><path d="M12 21.717C15.69 17.77 18 14.067 18 10a6 6 0 1 0-12 0c0 4.067 2.31 7.77 6 11.717z"/></svg></div>`,
-            iconSize: [32, 32],
-            iconAnchor: [16, 16]
-          });
-          formClickMarkerRef.current = L.marker([latitude, longitude], { icon }).addTo(formMarkersRef.current!);
         }
         setLocating(false);
       },
@@ -150,47 +269,86 @@ export default function DeviationPage() {
     }, 1500);
   };
 
-  interface OverpassElement {
-    type: string;
-    geometry?: { lat: number; lon: number }[];
-    members?: { type: string; geometry?: { lat: number; lon: number }[] }[];
-  }
-  interface OverpassResponse {
-    elements: OverpassElement[];
-  }
-
+  // ============================================================
+  // 🔑 Dessin CORRECT de la limite (avec fusion en anneaux)
+  // ============================================================
   const drawBoundary = (data: OverpassResponse) => {
     const bLayer = boundaryLayerRef.current;
-    if (!bLayer || !data.elements) return;
+    if (!bLayer) return;
     bLayer.clearLayers();
 
-    data.elements.forEach((el) => {
-      if (el.type === 'way' && el.geometry) {
-        const coords = el.geometry.map((g) => [g.lat, g.lon] as [number, number]);
-        L.polygon(coords, {
-          color: '#2563eb',
-          weight: 2,
-          fillColor: '#2563eb',
-          fillOpacity: 0.08
-        }).addTo(bLayer);
-      }
-      if (el.type === 'relation' && el.members) {
-        el.members.forEach((member) => {
-          if (member.type === 'way' && member.geometry) {
-            const coords = member.geometry.map((g) => [g.lat, g.lon] as [number, number]);
-            L.polygon(coords, {
-              color: '#2563eb',
-              weight: 2,
-              fillColor: '#2563eb',
-              fillOpacity: 0.08
-            }).addTo(bLayer);
-          }
-        });
-      }
+    const segments = extractSegments(data);
+    if (segments.length === 0) return;
+
+    const rings = mergeSegmentsIntoRings(segments);
+    if (rings.length === 0) return;
+
+    // 1) Dessiner chaque anneau (contour net)
+    rings.forEach((ring) => {
+      L.polygon(ring, {
+        color: '#2563eb',
+        weight: 2.5,
+        fillColor: '#3b82f6',
+        fillOpacity: 0.05,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(bLayer);
     });
+
+    // 2) Masque : monde avec tous les anneaux comme trous
+    const maskRings = buildMaskRings(rings);
+    if (maskRings) {
+      const maskPolygon = L.polygon(maskRings, {
+        color: 'transparent',
+        fillColor: '#000000',
+        fillOpacity: 0.35,
+        interactive: false,
+        fillRule: 'evenodd'
+      }).addTo(bLayer);
+      maskPolygon.bringToBack();
+    }
   };
 
-  // Initialisation de la carte du formulaire
+  // ============================================================
+  // 🔑 Dessin CORRECT de la limite sur la carte du formulaire
+  // ============================================================
+  const drawFormBoundary = (data: OverpassResponse) => {
+    const bLayer = formBoundaryLayerRef.current;
+    if (!bLayer) return;
+    bLayer.clearLayers();
+
+    const segments = extractSegments(data);
+    if (segments.length === 0) return;
+
+    const rings = mergeSegmentsIntoRings(segments);
+    if (rings.length === 0) return;
+
+    // 1) Contour net
+    rings.forEach((ring) => {
+      L.polygon(ring, {
+        color: '#2563eb',
+        weight: 2.5,
+        fillColor: '#3b82f6',
+        fillOpacity: 0.05,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(bLayer);
+    });
+
+    // 2) Masque extérieur
+    const maskRings = buildMaskRings(rings);
+    if (maskRings) {
+      const maskPolygon = L.polygon(maskRings, {
+        color: 'transparent',
+        fillColor: '#000000',
+        fillOpacity: 0.35,
+        interactive: false,
+        fillRule: 'evenodd'
+      }).addTo(bLayer);
+      maskPolygon.bringToBack();
+    }
+  };
+
   const initFormMap = () => {
     if (!formMapElRef.current || formMapRef.current) return;
     const map = L.map(formMapElRef.current, { zoomControl: true }).setView([-21.45249, 47.085447], 14);
@@ -200,41 +358,31 @@ export default function DeviationPage() {
       maxZoom: 19
     }).addTo(map);
     formMarkersRef.current = L.layerGroup().addTo(map);
+    formBoundaryLayerRef.current = L.layerGroup().addTo(map);
 
-    // Gestion du clic sur la carte du formulaire
+    drawFormBoundary(boundaryData as OverpassResponse);
+
     map.on('click', async (e: L.LeafletMouseEvent) => {
-      if (!selectingPoint) return;
+      const currentSelecting = selectingPointRef.current;
+      if (!currentSelecting) return;
+
       const { lat, lng } = e.latlng;
 
-      // Retire l'ancien marqueur
-      if (formClickMarkerRef.current && formMapRef.current) {
-        formMapRef.current.removeLayer(formClickMarkerRef.current);
-      }
-
-      const color = selectingPoint === 'A' ? '#22c55e' : '#ef4444';
-      const num = selectingPoint === 'A' ? 'A' : 'B';
-      const icon = L.divIcon({
-        className: '',
-        html: `<div style="background:${color};color:white;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3)">${num}</div>`,
-        iconSize: [32, 32],
-        iconAnchor: [16, 16]
-      });
-      formClickMarkerRef.current = L.marker([lat, lng], { icon }).addTo(formMarkersRef.current!);
-
-      await setPointWithGeocode(selectingPoint, lat, lng);
+      placeMarkerOnFormMap(currentSelecting, lat, lng);
+      await setPointWithGeocode(currentSelecting, lat, lng);
       setSelectingPoint(null);
     });
-
-    setFormMapReady(true);
 
     return () => {
       map.remove();
       formMapRef.current = null;
-      setFormMapReady(false);
+      formMarkersRef.current = null;
+      formBoundaryLayerRef.current = null;
+      markerARef.current = null;
+      markerBRef.current = null;
     };
   };
 
-  // Initialisation de la carte des résultats
   const initMap = () => {
     if (!mapElRef.current || mapRef.current) return;
     const map = L.map(mapElRef.current, { zoomControl: true }).setView([-21.45249, 47.085447], 14);
@@ -269,7 +417,6 @@ export default function DeviationPage() {
     };
   }, [showMap]);
 
-  // Invalide la taille de la carte quand le mode de sélection change (pour le curseur)
   useEffect(() => {
     if (formMapRef.current) {
       setTimeout(() => formMapRef.current?.invalidateSize(), 100);
@@ -294,7 +441,6 @@ export default function DeviationPage() {
     mLayer.clearLayers();
 
     const allCoords: [number, number][] = [];
-
     const { A, B } = fianarantsoaRoutes.points;
 
     routes.forEach((route) => {
@@ -314,15 +460,11 @@ export default function DeviationPage() {
       allCoords.push(...(route.polyline as [number, number][]));
     });
 
-    L.marker([A.lat, A.lng], {
-      icon: createNumberedIcon(1, '#22c55e')
-    })
+    L.marker([A.lat, A.lng], { icon: createNumberedIcon(1, '#22c55e') })
       .addTo(mLayer)
       .bindPopup(`<strong>Départ:</strong> ${A.name}`);
 
-    L.marker([B.lat, B.lng], {
-      icon: createNumberedIcon(2, '#ef4444')
-    })
+    L.marker([B.lat, B.lng], { icon: createNumberedIcon(2, '#ef4444') })
       .addTo(mLayer)
       .bindPopup(`<strong>Arrivée:</strong> ${B.name}`);
 
@@ -353,7 +495,6 @@ export default function DeviationPage() {
 
   return (
     <div className="h-full flex flex-col gap-4">
-      {/* En-tête */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Planificateur de déviations - Fianarantsoa</h1>
@@ -377,14 +518,11 @@ export default function DeviationPage() {
         </div>
       </div>
 
-      {/* Formulaire */}
       {tab === 'form' && (
         <div className="flex flex-col lg:grid lg:grid-cols-[1fr_420px] gap-4 flex-1 min-h-0">
-          {/* Carte du formulaire */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm flex flex-col min-h-[400px] lg:min-h-0 relative">
             <div ref={formMapElRef} className="flex-1 z-10" />
 
-            {/* Indicateur de sélection */}
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
               {selectingPoint ? (
                 <div
@@ -406,7 +544,6 @@ export default function DeviationPage() {
               )}
             </div>
 
-            {/* Curseur personnalisé quand on sélectionne */}
             {selectingPoint && (
               <style>{`
                 .leaflet-container { cursor: crosshair !important; }
@@ -414,10 +551,8 @@ export default function DeviationPage() {
             )}
           </div>
 
-          {/* Panneau du formulaire */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm flex flex-col">
             <div className="flex flex-col gap-4 mb-4">
-              {/* Point A */}
               <div>
                 <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
                   <MapPin size={14} className="text-green-500" />
@@ -477,7 +612,6 @@ export default function DeviationPage() {
                 </div>
               </div>
 
-              {/* Point B */}
               <div>
                 <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
                   <MapPin size={14} className="text-red-500" />
@@ -505,7 +639,6 @@ export default function DeviationPage() {
               </div>
             </div>
 
-            {/* Mode de transport */}
             <div className="mb-4">
               <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
                 <Navigation size={14} />
@@ -559,10 +692,8 @@ export default function DeviationPage() {
         </div>
       )}
 
-      {/* Résultats */}
       {tab === 'results' && (
         <div className="flex flex-col lg:grid lg:grid-cols-[1fr_380px] gap-4 flex-1 min-h-0">
-          {/* Carte */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm flex flex-col min-h-[600px] lg:min-h-0">
             {showMap && <div ref={mapElRef} className="flex-1 z-10" />}
             {!showMap && (
@@ -572,11 +703,9 @@ export default function DeviationPage() {
             )}
           </div>
 
-          {/* Panneau droit : liste ou détail */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col overflow-hidden">
             {rightPanel === 'detail' && selectedRoute ? (
               <>
-                {/* En-tête détail */}
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
                   <button
                     onClick={() => setRightPanel('list')}
@@ -593,7 +722,6 @@ export default function DeviationPage() {
                   </div>
                 </div>
 
-                {/* Stats */}
                 <div className="flex items-center gap-4 px-4 py-2.5 border-b border-gray-100 text-xs text-gray-500">
                   <span className="flex items-center gap-1">
                     <Navigation size={12} /> {selectedRoute.distance} km
@@ -608,7 +736,6 @@ export default function DeviationPage() {
                   )}
                 </div>
 
-                {/* Instructions */}
                 <div className="flex-1 overflow-y-auto px-4 py-3">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-3">Instructions</p>
                   <div className="relative">
@@ -631,14 +758,12 @@ export default function DeviationPage() {
               </>
             ) : (
               <>
-                {/* En-tête liste */}
                 <div className="px-4 py-3 border-b border-gray-100">
                   <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
                     Itinéraires ({results.length})
                   </p>
                 </div>
 
-                {/* Liste */}
                 <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
                   {searching && (
                     <div className="flex flex-col items-center justify-center py-10 gap-2 text-gray-400">
