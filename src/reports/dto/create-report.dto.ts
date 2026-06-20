@@ -1,75 +1,59 @@
-import {
-  IsString,
-  IsNotEmpty,
-  IsEnum,
-  IsNumber,
-  IsOptional,
-  IsArray,
-  MaxLength,
-  ValidateNested,
-  Min,
-  Max,
-} from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsString, IsNotEmpty, IsEnum, IsNumber, IsOptional, Min, Max } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-export class LocationDto {
-  @ApiProperty({ description: 'Latitude', example: -18.8792 })
-  @IsNumber()
-  @Min(-19.05)
-  @Max(-18.75)
-  lat: number;
-
-  @ApiProperty({ description: 'Longitude', example: 47.5079 })
-  @IsNumber()
-  @Min(47.35)
-  @Max(47.65)
-  lng: number;
-
-  @ApiPropertyOptional({ description: 'Adresse', example: "Avenue de l'Indépendance" })
-  @IsOptional()
-  @IsString()
-  address?: string;
-
-  @ApiPropertyOptional({ description: 'Quartier', example: 'Antaninarenina' })
-  @IsOptional()
-  @IsString()
-  neighborhood?: string;
-}
-
 export class CreateReportDto {
-  @ApiProperty({ description: 'Type de signalement', enum: ['traffic_jam', 'road_blocked', 'flood', 'accident', 'transport_issue'], example: 'traffic_jam' })
-  @IsEnum(['traffic_jam', 'road_blocked', 'flood', 'accident', 'transport_issue'])
+  @ApiProperty({ description: "Type d'incident", enum: ['accident', 'construction', 'road_work', 'obstacle'], example: 'accident' })
+  @IsEnum(['accident', 'construction', 'road_work', 'obstacle'])
   type: string;
 
   @ApiProperty({ description: 'Sévérité', enum: ['low', 'medium', 'high', 'critical'], example: 'high' })
   @IsEnum(['low', 'medium', 'high', 'critical'])
   severity: string;
 
-  @ApiProperty({ description: 'Localisation', type: LocationDto })
-  @ValidateNested()
-  @Type(() => LocationDto)
-  location: LocationDto;
-
-  @ApiProperty({ description: 'Description du problème', example: 'Embouteillage sur la RN1 en direction du centre-ville' })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(500)
-  description: string;
-
-  @ApiProperty({ description: "ID de l'utilisateur", example: '507f1f77bcf86cd799439011' })
-  @IsString()
-  @IsNotEmpty()
-  createdBy: string;
-
-  @ApiPropertyOptional({ description: 'ID de la route associée', example: '550e8400-e29b-41d4-a716-446655440000' })
+  @ApiPropertyOptional({ description: 'ID de la route associée', example: '550e8400-e29b-41d4-a716-446655440001' })
   @IsOptional()
   @IsString()
   routeId?: string;
 
-  @ApiPropertyOptional({ description: 'Photos (URLs)', type: [String] })
+  @ApiPropertyOptional({ description: 'Latitude', example: -18.903 })
   @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  photos?: string[];
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  lat?: number;
+
+  @ApiPropertyOptional({ description: 'Longitude', example: 47.522 })
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  lon?: number;
+
+  @ApiPropertyOptional({ description: 'Position sur la route (0-100%)', example: 50.0 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(100)
+  positionOnRoute?: number;
+
+  @ApiProperty({ description: 'Description', example: 'Accident sur la RN1' })
+  @IsString()
+  @IsNotEmpty()
+  description: string;
+
+  @ApiPropertyOptional({ description: 'Nombre de voies bloquées', example: 2 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  lanesBlocked?: number;
+
+  @ApiPropertyOptional({ description: "ID de l'utilisateur", example: '550e8400-e29b-41d4-a716-446655440000' })
+  @IsOptional()
+  @IsString()
+  reportedBy?: string;
+
+  @ApiPropertyOptional({ description: 'Date de fin (prévisionnelle)', example: '2026-06-21T12:00:00.000Z' })
+  @IsOptional()
+  @IsString()
+  endTime?: string;
 }

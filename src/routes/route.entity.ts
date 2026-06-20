@@ -27,6 +27,18 @@ export class Route {
   @Column({ type: 'float' })
   duration!: number;
 
+  @ApiProperty({ description: 'Nombre de voies', example: 2 })
+  @Column({ type: 'int', default: 2 })
+  lanes!: number;
+
+  @ApiProperty({ description: 'Limite de vitesse (km/h)', example: 50 })
+  @Column({ type: 'int', default: 50 })
+  speedLimit!: number;
+
+  @ApiProperty({ description: 'Sens de circulation', enum: ['both', 'one-way'], example: 'both' })
+  @Column({ type: 'varchar', default: 'both' })
+  direction!: string;
+
   @ApiProperty({ description: 'Date de création', example: '2026-06-20T15:39:00.000Z' })
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt!: Date;

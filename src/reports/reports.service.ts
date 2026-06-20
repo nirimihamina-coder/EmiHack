@@ -1,6 +1,5 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Cron, CronExpression } from '@nestjs/schedule';
 import { Repository } from 'typeorm';
 import { Report } from './schemas/report.schema';
 import { CreateReportDto } from './dto/create-report.dto';
@@ -15,11 +14,22 @@ export class ReportsService {
     private readonly reportsGateway: ReportsGateway,
   ) {}
 
-  async create(createReportDto: CreateReportDto): Promise<Report> {
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 2);
+  async create(dto: CreateReportDto): Promise<Report> {
+    const data: Partial<Report> = {
+      type: dto.type,
+      severity: dto.severity,
+      description: dto.description,
+      lat: dto.lat,
+      lon: dto.lon,
+      positionOnRoute: dto.positionOnRoute,
+      lanesBlocked: dto.lanesBlocked ?? 0,
+      reportedBy: dto.reportedBy,
+    };
 
-    const report = this.reportRepository.create({ ...createReportDto, expiresAt });
+    if (dto.routeId) data.route = { id: dto.routeId } as any;
+    if (dto.endTime) data.endTime = new Date(dto.endTime);
+
+    const report = this.reportRepository.create(data);
     const saved = await this.reportRepository.save(report);
 
     this.reportsGateway.handleNewReport(saved);
@@ -27,14 +37,11 @@ export class ReportsService {
   }
 
   async findAll(query: QueryReportsDto): Promise<Report[]> {
-    const qb = this.reportRepository.createQueryBuilder('report');
-    qb.where('report.status != :expired', { expired: 'expired' });
+    const qb = this.reportRepository.createQueryBuilder('report')
+      .leftJoinAndSelect('report.route', 'route');
 
     if (query.type) qb.andWhere('report.type = :type', { type: query.type });
     if (query.severity) qb.andWhere('report.severity = :severity', { severity: query.severity });
-    if (query.neighborhood) {
-      qb.andWhere("report.location->>'neighborhood' = :neighborhood", { neighborhood: query.neighborhood });
-    }
 
     qb.orderBy('report.createdAt', 'DESC');
     qb.take(query.limit || 50);
@@ -44,7 +51,8 @@ export class ReportsService {
     const { lat, lng, radius } = query;
     if (lat !== undefined && lng !== undefined && radius !== undefined) {
       reports = reports.filter((r) => {
-        const distance = this.haversineDistance(lat, lng, r.location.lat, r.location.lng);
+        if (r.lat === undefined || r.lon === undefined) return false;
+        const distance = this.haversineDistance(lat, lng, r.lat, r.lon);
         return distance <= radius;
       });
     }
@@ -53,40 +61,26 @@ export class ReportsService {
   }
 
   async findById(id: string): Promise<Report> {
-    const report = await this.reportRepository.findOne({ where: { id } });
+    const report = await this.reportRepository.findOne({
+      where: { id },
+      relations: { route: true },
+    });
     if (!report) throw new NotFoundException('Signalement non trouvé');
     return report;
   }
 
-  async vote(id: string, vote: 'up' | 'down'): Promise<Report> {
-    const report = await this.reportRepository.findOne({ where: { id } });
-    if (!report) throw new NotFoundException('Signalement non trouvé');
-
-    if (vote === 'up') report.upvotes += 1;
-    else report.downvotes += 1;
-
-    const saved = await this.reportRepository.save(report);
-    this.reportsGateway.handleReportUpdated(saved);
-    return saved;
-  }
-
   async resolve(id: string): Promise<Report> {
-    const report = await this.reportRepository.findOne({ where: { id } });
-    if (!report) throw new NotFoundException('Signalement non trouvé');
-
+    const report = await this.findById(id);
     report.status = 'resolved';
+    report.endTime = new Date();
     const saved = await this.reportRepository.save(report);
     this.reportsGateway.handleReportUpdated(saved);
     return saved;
   }
 
-  async delete(id: string, userId: string): Promise<void> {
+  async delete(id: string): Promise<void> {
     const report = await this.reportRepository.findOne({ where: { id } });
     if (!report) throw new NotFoundException('Signalement non trouvé');
-    if (report.createdBy !== userId) {
-      throw new BadRequestException("Vous n'êtes pas le créateur de ce signalement");
-    }
-
     await this.reportRepository.delete(id);
   }
 
@@ -107,32 +101,7 @@ export class ReportsService {
       .groupBy('report.severity')
       .getRawMany();
 
-    const byNeighborhood = await this.reportRepository
-      .createQueryBuilder('report')
-      .select("report.location->>'neighborhood'", 'neighborhood')
-      .addSelect('COUNT(*)', 'count')
-      .where("report.location->>'neighborhood' IS NOT NULL")
-      .groupBy("report.location->>'neighborhood'")
-      .getRawMany();
-
-    return { total, byType, bySeverity, byNeighborhood };
-  }
-
-  @Cron(CronExpression.EVERY_5_MINUTES)
-  async expireOldReports(): Promise<number> {
-    const result = await this.reportRepository
-      .createQueryBuilder()
-      .update(Report)
-      .set({ status: 'expired' })
-      .where('expiresAt <= :now', { now: new Date() })
-      .andWhere('status = :active', { active: 'active' })
-      .execute();
-
-    if (result.affected && result.affected > 0) {
-      this.reportsGateway.handleReportsExpired(result.affected);
-    }
-
-    return result.affected || 0;
+    return { total, byType, bySeverity };
   }
 
   private haversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {

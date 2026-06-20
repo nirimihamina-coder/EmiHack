@@ -1,67 +1,64 @@
-import { Entity, PrimaryGeneratedColumn, Column, Index } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, Index, JoinColumn } from 'typeorm';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Route } from '../../routes/route.entity';
 
 @Entity()
-@Index(['status', 'expiresAt'])
+@Index(['status', 'startTime'])
 export class Report {
   @ApiProperty({ description: 'ID unique', example: '550e8400-e29b-41d4-a716-446655440000' })
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @ApiProperty({ description: 'Type de problème', enum: ['traffic_jam', 'road_blocked', 'flood', 'accident', 'transport_issue'], example: 'traffic_jam' })
-  @Column({ type: 'varchar' })
+  @ApiProperty({ description: "Type d'incident", enum: ['accident', 'construction', 'road_work', 'obstacle'], example: 'accident' })
+  @Column({ type: 'varchar', length: 50 })
   type!: string;
 
   @ApiProperty({ description: 'Niveau de sévérité', enum: ['low', 'medium', 'high', 'critical'], example: 'high' })
-  @Column({ type: 'varchar' })
+  @Column({ type: 'varchar', length: 20 })
   severity!: string;
 
-  @ApiProperty({ description: 'Coordonnées et adresse' })
-  @Column({ type: 'jsonb' })
-  location!: {
-    lat: number;
-    lng: number;
-    address?: string;
-    neighborhood?: string;
-  };
+  @ApiPropertyOptional({ description: 'Route associée', type: () => Route })
+  @ManyToOne(() => Route, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'route_id' })
+  route?: Route;
 
-  @ApiProperty({ description: 'Description du problème', example: 'Embouteillage sur la RN1' })
-  @Column({ type: 'varchar', length: 500 })
+  @ApiPropertyOptional({ description: 'Latitude', example: -18.903 })
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  lat?: number;
+
+  @ApiPropertyOptional({ description: 'Longitude', example: 47.522 })
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  lon?: number;
+
+  @ApiPropertyOptional({ description: 'Position sur la route (0-100%)', example: 50.0 })
+  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
+  positionOnRoute?: number;
+
+  @ApiProperty({ description: 'Description', example: 'Accident sur la RN1 au niveau du carrefour' })
+  @Column({ type: 'text' })
   description!: string;
 
-  @ApiProperty({ description: "ID de l'utilisateur créateur", example: '507f1f77bcf86cd799439011' })
-  @Column()
-  createdBy!: string;
+  @ApiProperty({ description: 'Nombre de voies bloquées', example: 2 })
+  @Column({ type: 'int', default: 0 })
+  lanesBlocked!: number;
 
-  @ApiPropertyOptional({ description: 'ID de la route associée', example: '550e8400-e29b-41d4-a716-446655440000' })
+  @ApiPropertyOptional({ description: "ID de l'utilisateur qui a signalé", example: '550e8400-e29b-41d4-a716-446655440000' })
   @Column({ nullable: true })
-  routeId?: string;
+  reportedBy?: string;
 
-  @ApiProperty({ description: 'Nombre de votes positifs', example: 12 })
-  @Column({ default: 0 })
-  upvotes!: number;
+  @ApiProperty({ description: 'Date de début', example: '2026-06-21T10:00:00.000Z' })
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  startTime!: Date;
 
-  @ApiProperty({ description: 'Nombre de votes négatifs', example: 2 })
-  @Column({ default: 0 })
-  downvotes!: number;
+  @ApiPropertyOptional({ description: 'Date de fin', example: '2026-06-21T12:00:00.000Z' })
+  @Column({ type: 'timestamp', nullable: true })
+  endTime?: Date;
 
-  @ApiProperty({ description: 'Statut', enum: ['active', 'resolved', 'expired'], example: 'active' })
-  @Column({ default: 'active' })
+  @ApiProperty({ description: 'Statut', enum: ['active', 'resolved'], example: 'active' })
+  @Column({ type: 'varchar', length: 20, default: 'active' })
   status!: string;
 
-  @ApiPropertyOptional({ description: 'URLs des photos', type: [String] })
-  @Column('text', { array: true, default: '{}' })
-  photos!: string[];
-
-  @ApiProperty({ description: "Date d'expiration", example: '2026-06-20T17:39:00.000Z' })
-  @Column({ type: 'timestamp' })
-  expiresAt!: Date;
-
-  @ApiProperty({ description: 'Date de création', example: '2026-06-20T15:39:00.000Z' })
+  @ApiProperty({ description: 'Date de création', example: '2026-06-21T10:00:00.000Z' })
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt!: Date;
-
-  @ApiProperty({ description: 'Date de mise à jour', example: '2026-06-20T15:39:00.000Z' })
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' })
-  updatedAt!: Date;
 }

@@ -38,6 +38,9 @@ export class RoutesController {
       type: r.type,
       distance: r.distance,
       duration: r.duration,
+      lanes: r.lanes,
+      speedLimit: r.speedLimit,
+      direction: r.direction,
       createdAt: r.createdAt,
       coordinatesUrl: `${baseUrl}/routes/${r.id}/coordinates`,
     }));

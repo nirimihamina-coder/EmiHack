@@ -21,20 +21,15 @@ export class QueryReportsDto {
   @Type(() => Number)
   radius?: number;
 
-  @ApiPropertyOptional({ description: 'Filtrer par type', enum: ['traffic_jam', 'road_blocked', 'flood', 'accident', 'transport_issue'] })
+  @ApiPropertyOptional({ description: 'Filtrer par type', enum: ['accident', 'construction', 'road_work', 'obstacle'] })
   @IsOptional()
-  @IsEnum(['traffic_jam', 'road_blocked', 'flood', 'accident', 'transport_issue'])
+  @IsEnum(['accident', 'construction', 'road_work', 'obstacle'])
   type?: string;
 
   @ApiPropertyOptional({ description: 'Filtrer par sévérité', enum: ['low', 'medium', 'high', 'critical'] })
   @IsOptional()
   @IsEnum(['low', 'medium', 'high', 'critical'])
   severity?: string;
-
-  @ApiPropertyOptional({ description: 'Filtrer par quartier', example: 'Antaninarenina' })
-  @IsOptional()
-  @IsString()
-  neighborhood?: string;
 
   @ApiPropertyOptional({ description: 'Nombre maximum de résultats', example: 50 })
   @IsOptional()

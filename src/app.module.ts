@@ -4,6 +4,11 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ReportsModule } from './reports/reports.module';
 import { RoutesModule } from './routes/routes.module';
+import { IntersectionsModule } from './intersections/intersections.module';
+import { RouteIntersectionsModule } from './route-intersections/route-intersections.module';
+import { SimulationScenariosModule } from './simulation-scenarios/simulation-scenarios.module';
+import { SimulationRouteConfigsModule } from './simulation-route-configs/simulation-route-configs.module';
+import { SimulationResultsModule } from './simulation-results/simulation-results.module';
 
 @Module({
   imports: [
@@ -22,6 +27,11 @@ import { RoutesModule } from './routes/routes.module';
     ScheduleModule.forRoot(),
     ReportsModule,
     RoutesModule,
+    IntersectionsModule,
+    RouteIntersectionsModule,
+    SimulationScenariosModule,
+    SimulationRouteConfigsModule,
+    SimulationResultsModule,
   ],
 })
 export class AppModule {}

@@ -1,6 +1,6 @@
 import {
   IsString, IsNotEmpty, IsNumber, IsArray, ArrayMinSize, Validate,
-  ValidatorConstraint, ValidatorConstraintInterface,
+  ValidatorConstraint, ValidatorConstraintInterface, IsOptional, IsEnum, Min, Allow,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -51,4 +51,24 @@ export class CreateRouteDto {
   @ApiProperty({ description: 'Durée estimée en minutes', example: 35 })
   @IsNumber()
   duration!: number;
+
+  @ApiProperty({ description: 'Nombre de voies', example: 2 })
+  @Allow()
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  lanes?: number;
+
+  @ApiProperty({ description: 'Limite de vitesse (km/h)', example: 50 })
+  @Allow()
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  speedLimit?: number;
+
+  @ApiProperty({ description: 'Sens de circulation', enum: ['both', 'one-way'], example: 'both' })
+  @Allow()
+  @IsOptional()
+  @IsEnum(['both', 'one-way'])
+  direction?: string;
 }
