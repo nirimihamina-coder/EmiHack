@@ -1,0 +1,127 @@
+import { NavLink } from 'react-router-dom';
+import { LayoutDashboard, Settings, LogOut, MailIcon, PresentationIcon, MapIcon } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useModal } from '../../context/ModalContext';
+
+const navItems = [
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', end: true },
+  { to: '/dashboard/settings', icon: Settings, label: 'Paramètres' },
+  { to: '/dashboard/message', icon: MailIcon, label: 'Messages' },
+  { to: '/dashboard/crud', icon: PresentationIcon, label: 'C.R.U.D' },
+  { to: '/dashboard/carte', icon: MapIcon, label: 'Cartes' }
+];
+
+interface SidebarContentProps {
+  collapsed?: boolean;
+  onNavClick?: () => void;
+}
+
+const SidebarContent = ({ collapsed = false, onNavClick }: SidebarContentProps) => {
+  const { openModal } = useModal();
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Logo */}
+      <div className="flex items-center gap-3 px-4 py-5 border-b border-gray-100 transition-all duration-300">
+        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
+          <LayoutDashboard size={16} className="text-white" />
+        </div>
+        {!collapsed && (
+          <span className="font-semibold text-gray-900 text-sm whitespace-nowrap transition-opacity duration-200">
+            Mon App
+          </span>
+        )}
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto overflow-x-hidden">
+        {navItems.map(({ to, icon: Icon, label, end }) => (
+          <NavItem key={to} to={to} icon={Icon} label={label} end={end} collapsed={collapsed} onNavClick={onNavClick} />
+        ))}
+      </nav>
+
+      {/* Logout */}
+      <div className="px-2 py-3 border-t border-gray-100">
+        <button
+          onClick={() => openModal('logout')}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all duration-300"
+        >
+          <LogOut size={18} className="flex-shrink-0" />
+          {!collapsed && <span className="line-clamp-1">Se déconnecter</span>}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+interface NavItemProps {
+  to: string;
+  icon: React.ElementType;
+  label: string;
+  end?: boolean;
+  collapsed: boolean;
+  onNavClick?: () => void;
+}
+
+function NavItem({ to, icon: Icon, label, end, collapsed, onNavClick }: NavItemProps) {
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const handleMouseEnter = () => {
+    if (!collapsed || !ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    setPos({
+      top: rect.top + rect.height / 2,
+      left: rect.right + 8
+    });
+  };
+
+  const handleMouseLeave = () => setPos(null);
+
+  return (
+    <>
+      <div ref={ref} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
+        <NavLink
+          to={to}
+          end={end}
+          onClick={onNavClick}
+          className={({ isActive }) =>
+            `group flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
+              isActive ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            }`
+          }
+        >
+          {({ isActive }) => (
+            <>
+              <Icon
+                size={19}
+                className={`flex-shrink-0 transition-colors ${
+                  isActive ? 'text-indigo-600' : 'group-hover:text-gray-900'
+                }`}
+              />
+              {!collapsed && <span className="transition-opacity duration-200">{label}</span>}
+            </>
+          )}
+        </NavLink>
+      </div>
+
+      {collapsed &&
+        pos &&
+        createPortal(
+          <div
+            className="fixed z-[9999] pointer-events-none flex items-center"
+            style={{ top: pos.top, left: pos.left, transform: 'translateY(-50%)' }}
+          >
+            <div className="w-0 h-0 border-y-4 border-y-transparent border-r-4 border-r-gray-900" />
+            <div className="px-3 py-2 text-xs text-white bg-gray-900 rounded-md shadow-lg whitespace-nowrap">
+              {label}
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
+
+export default SidebarContent;

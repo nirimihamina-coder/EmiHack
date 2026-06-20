@@ -1,0 +1,7 @@
+🚀 PROCESS SERVICE WORKER (PRO LEVEL)
+✔ ajouter table Dexie
+✔ schema Dexie (store)
+✔ créer fichier logique (ex: db/order.db.ts)
+✔ service API
+✔ hook
+✔ sync service
