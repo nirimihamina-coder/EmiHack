@@ -14,6 +14,7 @@
         .btn-export { background: #ffc107; }
         .btn-report { background: #dc3545; color: white; }
         .btn-foko { background: #ff7800; color: white; }
+        button:hover { opacity: 0.85; }
         label { cursor: pointer; user-select: none; font-size: 14px; }
         .legend { margin-top: 8px; font-size: 13px; }
         .legend span { display: inline-block; margin-right: 15px; }
@@ -21,7 +22,6 @@
     </style>
 </head>
 <body>
-
     <div class="controls">
         <h2>Tana Traffic</h2>
         <button class="btn-calc" onclick="fetchRoute()">Itinéraire</button>
@@ -30,21 +30,17 @@
         <button class="btn-foko" id="btnFokontany" onclick="toggleFokontany()">Fokontany</button>
         <button onclick="resetMap()">Réinitialiser</button>
     </div>
-
     <div id="map"></div>
-
     <div class="legend" id="legend">
         <span><span class="dot" style="background:red"></span>Itinéraire</span>
         <span><span class="dot" style="background:#ff7800;border:1px solid #cc6000"></span>Fokontany</span>
         <span><span class="dot" style="background:#007bff"></span>Signalement</span>
     </div>
-
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
         const API_BASE = '';
         const map = L.map('map').setView([-21.4546, 47.0875], 14);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-
         let points = [];
         let routeLayer = null;
         let lastGeoJSON = null;
@@ -53,7 +49,6 @@
         let fokontanyActive = false;
         let reportActive = false;
         const API_KEY = '5b3ce3597851110001cf6248f7be3c52a112485db4cb2a9e741b567b';
-
         const reportIcons = {
             traffic_jam: L.divIcon({ html: '<div style="background:#dc3545;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px">🚗</div>', className: '', iconSize: [28, 28] }),
             road_blocked: L.divIcon({ html: '<div style="background:#e74c3c;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px">🚧</div>', className: '', iconSize: [28, 28] }),
@@ -61,13 +56,11 @@
             accident: L.divIcon({ html: '<div style="background:#e67e22;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px">💥</div>', className: '', iconSize: [28, 28] }),
             transport_issue: L.divIcon({ html: '<div style="background:#9b59b6;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px">🚌</div>', className: '', iconSize: [28, 28] }),
         };
-
         map.on('click', function(e) {
             const coord = [e.latlng.lng, e.latlng.lat];
             points.push(coord);
             L.marker([e.latlng.lat, e.latlng.lng]).addTo(map).bindPopup('Point ' + points.length);
         });
-
         async function fetchRoute() {
             if (points.length < 2) return alert('Ajoutez au moins 2 points.');
             const url = 'https://api.openrouteservice.org/v2/directions/driving-car/geojson';
@@ -82,11 +75,8 @@
                 routeLayer = L.geoJSON(lastGeoJSON, { style: { color: 'red', weight: 5 } }).addTo(map);
                 map.fitBounds(routeLayer.getBounds());
                 document.getElementById('exportBtn').disabled = false;
-            } else {
-                alert('Erreur de calcul.');
-            }
+            } else alert('Erreur de calcul.');
         }
-
         function exportJSON() {
             if (!lastGeoJSON) return;
             const blob = new Blob([JSON.stringify(lastGeoJSON)], { type: 'application/json' });
@@ -95,57 +85,30 @@
             a.download = 'itineraire.json';
             a.click();
         }
-
         function overpassToGeoJSON(data) {
             const features = [];
             for (const el of data.elements || []) {
                 const pts = (el.geometry || []).map(g => [g.lon, g.lat]);
-                if (pts.length >= 3) {
-                    features.push({
-                        type: 'Feature',
-                        properties: { name: el.tags?.name || '', id: el.id },
-                        geometry: { type: 'Polygon', coordinates: [pts] },
-                    });
-                }
+                if (pts.length >= 3) features.push({ type: 'Feature', properties: { name: el.tags?.name || '', id: el.id }, geometry: { type: 'Polygon', coordinates: [pts] } });
             }
             return { type: 'FeatureCollection', features };
         }
-
         async function toggleFokontany() {
             fokontanyActive = !fokontanyActive;
             const btn = document.getElementById('btnFokontany');
-            if (!fokontanyActive) {
-                if (fokontanyLayer) map.removeLayer(fokontanyLayer);
-                btn.style.opacity = '1';
-                return;
-            }
-            btn.style.opacity = '0.6';
-            if (fokontanyLayer) { map.addLayer(fokontanyLayer); btn.style.opacity = '1'; return; }
+            if (!fokontanyActive) { if (fokontanyLayer) map.removeLayer(fokontanyLayer); return; }
+            if (fokontanyLayer) { map.addLayer(fokontanyLayer); return; }
             const center = map.getCenter();
-            const query = `[out:json][timeout:25];is_in(${center.lat.toFixed(5)}, ${center.lng.toFixed(5)})->.a;(relation(pivot.a)["boundary"="administrative"]["admin_level"="10"];);out geom;`;
+            const query = '[out:json][timeout:25];is_in(' + center.lat.toFixed(5) + ',' + center.lng.toFixed(5) + ')->.a;(relation(pivot.a)["boundary"="administrative"]["admin_level"="10"];);out geom;';
             try {
-                const res = await fetch('https://overpass-api.de/api/interpreter', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'data=' + encodeURIComponent(query),
-                });
-                const data = await res.json();
-                const geojson = overpassToGeoJSON(data);
-                if (geojson.features.length > 0) {
-                    fokontanyLayer = L.geoJSON(geojson, {
-                        style: { color: '#ff7800', weight: 2, fillOpacity: 0.08 },
-                    }).addTo(map);
-                }
+                const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query) });
+                const geojson = overpassToGeoJSON(await res.json());
+                if (geojson.features.length > 0) fokontanyLayer = L.geoJSON(geojson, { style: { color: '#ff7800', weight: 2, fillOpacity: 0.08 } }).addTo(map);
             } catch {}
-            btn.style.opacity = '1';
         }
-
         async function toggleReports() {
             reportActive = !reportActive;
-            if (!reportActive) {
-                if (reportLayer) map.removeLayer(reportLayer);
-                return;
-            }
+            if (!reportActive) { if (reportLayer) map.removeLayer(reportLayer); return; }
             if (reportLayer) { map.addLayer(reportLayer); return; }
             try {
                 const res = await fetch(API_BASE + '/reports');
@@ -154,16 +117,10 @@
                 reportLayer = L.layerGroup().addTo(map);
                 for (const r of data) {
                     const icon = reportIcons[r.type] || reportIcons.transport_issue;
-                    const popup = '<b>' + r.type.replace(/_/g, ' ') + '</b><br>' +
-                        r.description + '<br>' +
-                        '<small>Sévérité: ' + r.severity + ' | 👍 ' + r.upvotes + ' 👎 ' + r.downvotes + '</small>';
-                    L.marker([r.location.lat, r.location.lng], { icon })
-                        .bindPopup(popup)
-                        .addTo(reportLayer);
+                    L.marker([r.location.lat, r.location.lng], { icon }).bindPopup('<b>' + r.type.replace(/_/g, ' ') + '</b><br>' + r.description + '<br><small>Sévérité: ' + r.severity + ' | 👍 ' + r.upvotes + ' 👎 ' + r.downvotes + '</small>').addTo(reportLayer);
                 }
             } catch { reportActive = false; }
         }
-
         function resetMap() {
             points = [];
             if (routeLayer) map.removeLayer(routeLayer);
