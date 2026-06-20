@@ -21,6 +21,7 @@ import SettingsNotifications from './pages/settings/SettingsNotifications';
 import ProductPage from './pages/Product/Product';
 import SettingsFaceScan from './pages/settings/SettingsFaceScan';
 import CartePage from './pages/carte/Carte';
+import Simulation from './pages/simulation/Simulation';
 
 function App() {
   return (
@@ -53,6 +54,7 @@ function App() {
         </Route>
         <Route path="crud" element={<ProductPage />} />
         <Route path="carte" element={<CartePage />} />
+        <Route path="simulation" element={<Simulation />} />
       </Route>
     </Routes>
   );
