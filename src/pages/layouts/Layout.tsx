@@ -31,6 +31,10 @@ const routeConfig: Record<string, { title: string; description: string }> = {
   '/dashboard/settings/notifications': {
     title: 'Paramètres / Notifications',
     description: 'Configurez votre application et vos préférences'
+  },
+  '/dashboard/deviation': {
+    title: 'Déviation d\'itinéraire',
+    description: 'Planificateur de déviations - Fianarantsoa'
   }
 };
 

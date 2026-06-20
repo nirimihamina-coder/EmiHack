@@ -236,7 +236,7 @@ const Header = ({ title = 'Tableau de bord', description = 'Bienvenue sur votre 
                 <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-1 z-30 animate-in fade-in slide-in-from-top-2 duration-200">
                   <div className="flex pl-4 items-center justify-between">
                     <img
-                      src={`https://ui-avatars.com/api/?background=random&name=${firstName}+${lastName}`}
+                      src={avatar ||`https://ui-avatars.com/api/?background=random&name=${firstName}+${lastName}`}
                       alt="logo"
                       className="w-9 h-9 border border-gray-200 bg-blue-50 rounded-full"
                     />

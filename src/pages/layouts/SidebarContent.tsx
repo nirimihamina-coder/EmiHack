@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Settings, LogOut, MailIcon, PresentationIcon, MapIcon } from 'lucide-react';
+import { LayoutDashboard, Settings, LogOut, MailIcon, PresentationIcon, MapIcon, Route } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useModal } from '../../context/ModalContext';
@@ -9,7 +9,8 @@ const navItems = [
   { to: '/dashboard/settings', icon: Settings, label: 'Paramètres' },
   { to: '/dashboard/message', icon: MailIcon, label: 'Messages' },
   { to: '/dashboard/crud', icon: PresentationIcon, label: 'C.R.U.D' },
-  { to: '/dashboard/carte', icon: MapIcon, label: 'Cartes' }
+  { to: '/dashboard/carte', icon: MapIcon, label: 'Cartes' },
+  { to: '/dashboard/deviation', icon: Route, label: 'Déviation' }
 ];
 
 interface SidebarContentProps {
