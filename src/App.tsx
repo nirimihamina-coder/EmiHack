@@ -23,6 +23,7 @@ import SettingsFaceScan from './pages/settings/SettingsFaceScan';
 import CartePage from './pages/carte/Carte';
 import DeviationPage from './pages/deviation/DeviationPage';
 import MapCollector from './pages/deviation/MapCollector';
+import Simulation from './pages/simulation/Simulation';
 
 function App() {
   return (
@@ -57,6 +58,7 @@ function App() {
         <Route path="carte" element={<CartePage />} />
         <Route path="deviation" element={<DeviationPage />} />
         <Route path="mapcollector" element={<MapCollector />} />
+        <Route path="simulation" element={<Simulation />} />
       </Route>
     </Routes>
   );
