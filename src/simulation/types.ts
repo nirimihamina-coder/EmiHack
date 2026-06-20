@@ -21,4 +21,5 @@ export interface VehiclePosition {
   lat: number;
   lng: number;
   roadId: string;
+  type: 'car' | 'bus' | 'truck' | 'bike' | 'motorcycle';
 }
