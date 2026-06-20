@@ -19,6 +19,7 @@ export class ReportsService {
       type: dto.type,
       severity: dto.severity,
       description: dto.description,
+      fokontanyName: dto.fokontanyName,
       lat: dto.lat,
       lon: dto.lon,
       positionOnRoute: dto.positionOnRoute,

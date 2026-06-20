@@ -29,6 +29,11 @@ export class CreateReportDto {
   @Max(180)
   lon?: number;
 
+  @ApiPropertyOptional({ description: "Nom du fokontany", example: 'Antananinarivo' })
+  @IsOptional()
+  @IsString()
+  fokontanyName?: string;
+
   @ApiPropertyOptional({ description: 'Position sur la route (0-100%)', example: 50.0 })
   @IsOptional()
   @IsNumber()

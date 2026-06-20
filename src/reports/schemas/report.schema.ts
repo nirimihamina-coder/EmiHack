@@ -30,6 +30,10 @@ export class Report {
   @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
   lon?: number;
 
+  @ApiPropertyOptional({ description: "Nom du fokontany", example: 'Antananinarivo' })
+  @Column({ type: 'varchar', nullable: true })
+  fokontanyName?: string;
+
   @ApiPropertyOptional({ description: 'Position sur la route (0-100%)', example: 50.0 })
   @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
   positionOnRoute?: number;
