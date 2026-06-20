@@ -20,6 +20,10 @@
         <button class="btn-calc" onclick="fetchRoute()">Calculer la Route</button>
         <button class="btn-export" id="exportBtn" onclick="exportJSON()" disabled>Exporter en JSON</button>
         <button onclick="location.reload()">Réinitialiser</button>
+        <label style="margin-left:15px;cursor:pointer">
+            <input type="checkbox" id="showFokontany" onchange="toggleFokontany(this.checked)" />
+            Afficher les fokontany
+        </label>
     </div>
 
     <div id="map"></div>
@@ -62,6 +66,60 @@
                 document.getElementById('exportBtn').disabled = false;
             } else {
                 alert("Erreur de calcul.");
+            }
+        }
+
+        let fokontanyLayer = null;
+
+        function overpassToGeoJSON(data) {
+            const features = [];
+            for (const el of data.elements || []) {
+                const pts = (el.geometry || []).map(g => [g.lon, g.lat]);
+                if (pts.length >= 3) {
+                    features.push({
+                        type: 'Feature',
+                        properties: { name: el.tags?.name || '', id: el.id },
+                        geometry: { type: 'Polygon', coordinates: [pts] },
+                    });
+                }
+            }
+            return { type: 'FeatureCollection', features };
+        }
+
+        async function toggleFokontany(show) {
+            if (show) {
+                if (fokontanyLayer) {
+                    map.addLayer(fokontanyLayer);
+                    return;
+                }
+                const center = map.getCenter();
+                const query = `[out:json][timeout:25];
+is_in(${center.lat.toFixed(5)}, ${center.lng.toFixed(5)})->.a;
+(
+  relation(pivot.a)["boundary"="administrative"]["admin_level"="10"];
+);
+out geom;`;
+
+                try {
+                    const res = await fetch('https://overpass-api.de/api/interpreter', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: 'data=' + encodeURIComponent(query),
+                    });
+                    const data = await res.json();
+                    const geojson = overpassToGeoJSON(data);
+                    if (geojson.features.length > 0) {
+                        fokontanyLayer = L.geoJSON(geojson, {
+                            style: { color: '#ff7800', weight: 2, fillOpacity: 0.1 },
+                        }).addTo(map);
+                    } else {
+                        document.getElementById('showFokontany').checked = false;
+                    }
+                } catch {
+                    document.getElementById('showFokontany').checked = false;
+                }
+            } else if (fokontanyLayer) {
+                map.removeLayer(fokontanyLayer);
             }
         }
 
