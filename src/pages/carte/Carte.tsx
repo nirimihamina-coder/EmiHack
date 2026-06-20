@@ -1,13 +1,12 @@
 import { useEffect, useState } from 'react';
 import MapView from '../../components/MapView';
-import { fetchAdminBoundaries } from '../../services/geoService';
+import { fetchAdminBoundaries, createBoundaryMask } from '../../services/geoService';
 import { getRoadsGeoJSON } from '../../data/roads';
 import type { MapLayerConfig } from '../../interface/Map';
 
 export default function CartePage() {
   const [layers, setLayers] = useState<MapLayerConfig[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -16,14 +15,24 @@ export default function CartePage() {
         const boundaryData = await fetchAdminBoundaries();
         if (cancelled) return;
         const roadData = getRoadsGeoJSON();
+        const maskData = createBoundaryMask(boundaryData);
 
         setLayers([
           {
-            id: 'boundaries',
-            name: 'Limites administratives',
+            id: 'boundary-mask',
+            name: 'Limite Fianarantsoa',
+            data: maskData,
+            visible: true,
+            interactive: false,
+            style: { color: 'transparent', fillColor: '#000', fillOpacity: 0.35 },
+          },
+          {
+            id: 'boundary-line',
+            name: 'Limite (ligne)',
             data: boundaryData,
             visible: true,
-            style: { color: '#2563eb', weight: 2, fillColor: '#3b82f6', fillOpacity: 0.08 },
+            interactive: false,
+            style: { color: '#374151', weight: 2, fillColor: 'transparent', fillOpacity: 0 },
           },
           {
             id: 'roads',
@@ -34,9 +43,18 @@ export default function CartePage() {
           },
         ]);
         setLoading(false);
-      } catch (e) {
+      } catch {
         if (cancelled) return;
-        setError("Impossible de charger les limites administratives");
+        const roadData = getRoadsGeoJSON();
+        setLayers([
+          {
+            id: 'roads',
+            name: 'Réseau routier',
+            data: roadData,
+            visible: true,
+            interactive: true,
+          },
+        ]);
         setLoading(false);
       }
     }
@@ -48,17 +66,6 @@ export default function CartePage() {
     return (
       <div className="h-full flex items-center justify-center text-gray-400 text-sm">
         Chargement de la carte...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-red-500 text-sm mb-2">{error}</p>
-          <p className="text-gray-400 text-xs">Vérifiez votre connexion et réessayez.</p>
-        </div>
       </div>
     );
   }
@@ -134,7 +141,7 @@ export default function CartePage() {
                 { color: '#ca8a04', label: 'Route secondaire' },
                 { color: '#6b7280', label: 'Route tertiaire' },
                 { color: '#9ca3af', label: 'Rue résidentielle' },
-                { color: '#2563eb', label: 'Limite administrative' },
+                { color: '#374151', label: 'Limite Fianarantsoa' },
               ].map(({ color, label }) => (
                 <div key={label} className="flex items-center gap-2">
                   <div className="w-4 h-0.5 rounded" style={{ backgroundColor: color }} />

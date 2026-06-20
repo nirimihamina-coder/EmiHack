@@ -64,7 +64,11 @@ export default function MapView({
   const clickHandlerRef = useRef(onFeatureClick);
   clickHandlerRef.current = onFeatureClick;
 
+  const onMapReadyRef = useRef(onMapReady);
+  onMapReadyRef.current = onMapReady;
   const [tileKey, setTileKey] = useState<TileKey>('osm');
+
+  const mapReadyRef = useRef(false);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -73,10 +77,14 @@ export default function MapView({
     mapRef.current = map;
     tileRef.current = L.tileLayer(TILES.osm.url, { attribution: TILES.osm.attribution, maxZoom: 19 }).addTo(map);
 
+    mapReadyRef.current = true;
+    onMapReadyRef.current?.(map);
+
     return () => {
       map.remove();
       mapRef.current = null;
       layerMapRef.current.clear();
+      mapReadyRef.current = false;
     };
   }, [center, zoom]);
 

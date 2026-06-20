@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { SimulationConfig, VehiclePosition, SpeedMode } from '../simulation/types';
+import type { SimulationConfig, VehiclePosition } from '../simulation/types';
 
 interface SimulationStore {
   configs: SimulationConfig[];

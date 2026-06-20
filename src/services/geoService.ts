@@ -51,6 +51,51 @@ export async function fetchAdminBoundaries(): Promise<GeoJSONCollection> {
   return overpassToGeoJSON(data);
 }
 
-export function pointToCoords(p: { lat: number; lon: number }): [number, number] {
-  return [p.lat, p.lon];
+function extractBoundaryRings(data: GeoJSONCollection): [number, number][][] {
+  const rings: [number, number][][] = [];
+
+  for (const feat of data.features) {
+    const geom = feat.geometry;
+
+    if (geom.type === 'Polygon') {
+      rings.push((geom.coordinates as number[][][])[0].map((c) => [c[0], c[1]] as [number, number]));
+    } else if (geom.type === 'MultiPolygon') {
+      const polys = geom.coordinates as unknown as number[][][][];
+      for (const poly of polys) {
+        rings.push(poly[0].map((c) => [c[0], c[1]] as [number, number]));
+      }
+    }
+  }
+
+  return rings;
 }
+
+export function createBoundaryMask(boundaryData: GeoJSONCollection): GeoJSONCollection {
+  const rings = extractBoundaryRings(boundaryData);
+  if (rings.length === 0) return boundaryData;
+
+  const worldExtent: [number, number][] = [
+    [43, -25],
+    [51, -25],
+    [51, -18],
+    [43, -18],
+    [43, -25],
+  ];
+
+  const coordinates: number[][][] = [worldExtent, ...rings];
+
+  return {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        geometry: {
+          type: 'Polygon',
+          coordinates: coordinates,
+        },
+        properties: { role: 'mask' },
+      },
+    ],
+  };
+}
+
