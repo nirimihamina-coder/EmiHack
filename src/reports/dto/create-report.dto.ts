@@ -62,6 +62,11 @@ export class CreateReportDto {
   @IsNotEmpty()
   createdBy: string;
 
+  @ApiPropertyOptional({ description: 'ID de la route associée', example: '550e8400-e29b-41d4-a716-446655440000' })
+  @IsOptional()
+  @IsString()
+  routeId?: string;
+
   @ApiPropertyOptional({ description: 'Photos (URLs)', type: [String] })
   @IsOptional()
   @IsArray()

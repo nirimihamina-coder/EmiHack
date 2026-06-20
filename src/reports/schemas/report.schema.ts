@@ -33,6 +33,10 @@ export class Report {
   @Column()
   createdBy!: string;
 
+  @ApiPropertyOptional({ description: 'ID de la route associée', example: '550e8400-e29b-41d4-a716-446655440000' })
+  @Column({ nullable: true })
+  routeId?: string;
+
   @ApiProperty({ description: 'Nombre de votes positifs', example: 12 })
   @Column({ default: 0 })
   upvotes!: number;
