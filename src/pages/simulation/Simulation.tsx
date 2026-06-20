@@ -3,11 +3,11 @@ import L from 'leaflet';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-import { fetchAdminBoundaries, createBoundaryMask } from '../../services/geoService';
-import { getRoadsGeoJSON, getAllRoads } from '../../data/roads';
+import boundaryFianarantsoaRaw from '../../data/fianarantsoa-boundary.json';
+import { useRoadsStore, getAllRoads, getRoadsGeoJSON } from '../../stores/roads';
 import { SimulationEngine } from '../../simulation/engine';
 import { useSimulationStore } from '../../stores/simulation';
-import type { MapLayerConfig, GeoJSONFeature } from '../../interface/Map';
+import type { MapLayerConfig, GeoJSONFeature, GeoJSONCollection } from '../../interface/Map';
 import type { SpeedMode, VehiclePosition } from '../../simulation/types';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
@@ -52,6 +52,132 @@ function getFeatureId(feature: GeoJSONFeature, layerId: string): string {
   return (props.id as string) ?? `${layerId}-${(props.osmId as string) ?? Math.random()}`;
 }
 
+// ── Helpers Overpass → GeoJSON ───────────────────────────────────────────────
+function mergeSegmentsIntoRings(segments: number[][][]): number[][][] {
+  if (segments.length === 0) return [];
+  const remaining = segments.map((s) => [...s]);
+  const rings: number[][][] = [];
+  while (remaining.length > 0) {
+    let ring = [...remaining.shift()!];
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (let i = 0; i < remaining.length; i++) {
+        const seg = remaining[i];
+        const ringEnd = ring[ring.length - 1];
+        const segStart = seg[0];
+        const segEnd = seg[seg.length - 1];
+        const ringStart = ring[0];
+        const eq = (a: number[], b: number[]) =>
+          Math.abs(a[0] - b[0]) < 1e-6 && Math.abs(a[1] - b[1]) < 1e-6;
+        if (eq(ringEnd, segStart)) {
+          ring = [...ring, ...seg.slice(1)];
+          remaining.splice(i, 1);
+          changed = true;
+          break;
+        } else if (eq(ringEnd, segEnd)) {
+          ring = [...ring, ...[...seg].reverse().slice(1)];
+          remaining.splice(i, 1);
+          changed = true;
+          break;
+        } else if (eq(ringStart, segEnd)) {
+          ring = [...seg, ...ring.slice(1)];
+          remaining.splice(i, 1);
+          changed = true;
+          break;
+        } else if (eq(ringStart, segStart)) {
+          ring = [...[...seg].reverse(), ...ring.slice(1)];
+          remaining.splice(i, 1);
+          changed = true;
+          break;
+        }
+      }
+    }
+    const first = ring[0];
+    const last = ring[ring.length - 1];
+    if (
+      Math.abs(first[0] - last[0]) > 1e-6 ||
+      Math.abs(first[1] - last[1]) > 1e-6
+    )
+      ring.push(ring[0]);
+    if (ring.length >= 4) rings.push(ring);
+  }
+  return rings;
+}
+
+function overpassElementsToGeoJSON(elements: any[]): GeoJSON.FeatureCollection {
+  const features = elements
+    .map((el: any) => {
+      const outerSegments: number[][][] = (el.members || [])
+        .filter((m: any) => m.role === 'outer' && m.geometry?.length > 1)
+        .map((m: any) => m.geometry.map((g: any) => [g.lon, g.lat]));
+      const innerSegments: number[][][] = (el.members || [])
+        .filter((m: any) => m.role === 'inner' && m.geometry?.length > 1)
+        .map((m: any) => m.geometry.map((g: any) => [g.lon, g.lat]));
+      if (!outerSegments.length) return null;
+      const outerRings = mergeSegmentsIntoRings(outerSegments);
+      const innerRings = mergeSegmentsIntoRings(innerSegments);
+      if (!outerRings.length) return null;
+      return {
+        type: 'Feature',
+        properties: {
+          id: el.id,
+          name: el.tags?.['name:fr'] || el.tags?.name || 'Fianarantsoa',
+        },
+        geometry: {
+          type: 'MultiPolygon',
+          coordinates: outerRings.map((outer) => [outer, ...innerRings]),
+        },
+      } as GeoJSON.Feature;
+    })
+    .filter(Boolean) as GeoJSON.Feature[];
+  return { type: 'FeatureCollection', features };
+}
+
+function createBoundaryMask(boundary: GeoJSON.FeatureCollection): GeoJSON.FeatureCollection {
+  const world = [
+    [
+      [-180, -90],
+      [180, -90],
+      [180, 90],
+      [-180, 90],
+      [-180, -90],
+    ],
+  ];
+  const holes: number[][][] = [];
+  for (const feature of boundary.features) {
+    const geom = feature.geometry as GeoJSON.MultiPolygon | GeoJSON.Polygon;
+    if (geom.type === 'MultiPolygon') {
+      for (const poly of geom.coordinates) {
+        for (const ring of poly) holes.push(ring as number[][]);
+      }
+    } else if (geom.type === 'Polygon') {
+      for (const ring of geom.coordinates) holes.push(ring as number[][]);
+    }
+  }
+  return {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        properties: { id: 'mask', name: 'Mask' },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [world[0] as number[][], ...holes as number[][][]],
+        },
+      },
+    ],
+  };
+}
+
+function loadBoundaryFromJson(): GeoJSON.FeatureCollection {
+  const raw = boundaryFianarantsoaRaw as unknown as { elements?: any[] };
+  if (!raw.elements?.length) {
+    throw new Error('Aucune donnée de limite dans le JSON');
+  }
+  return overpassElementsToGeoJSON(raw.elements);
+}
+
 type SimParams = Record<string, { vehicleCount: number; speed: SpeedMode }>;
 
 export default function Simulation() {
@@ -60,9 +186,13 @@ export default function Simulation() {
   const selectedRoadsRef = useRef(selectedRoads);
   useEffect(() => { selectedRoadsRef.current = selectedRoads; }, [selectedRoads]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const { configs, positions, addConfig, removeConfig, setRunning, setPositions, reset } =
     useSimulationStore();
+
+  // ✅ Store des routes (appel API)
+  const { load: loadRoads, loaded: roadsLoaded, loading: roadsLoading } = useRoadsStore();
 
   const [params, setParams] = useState<SimParams>({});
 
@@ -79,74 +209,69 @@ export default function Simulation() {
     setPositionsRef.current = setPositions;
   }, [setPositions]);
 
+  // ✅ Chargement des routes via l'API
   useEffect(() => {
-    let cancelled = false;
-    async function init() {
-      try {
-        const boundaryData = await fetchAdminBoundaries();
-        if (cancelled) return;
-        const roadData = getRoadsGeoJSON();
-        const maskData = createBoundaryMask(boundaryData);
-
-        setLayers([
-          {
-            id: 'boundary-mask',
-            name: 'Limite Fianarantsoa',
-            data: maskData,
-            visible: true,
-            interactive: false,
-            style: { color: 'transparent', fillColor: '#000', fillOpacity: 0.35 },
-          },
-          {
-            id: 'boundary-line',
-            name: 'Limite (ligne)',
-            data: boundaryData,
-            visible: true,
-            interactive: false,
-            style: { color: '#374151', weight: 2, fillColor: 'transparent', fillOpacity: 0 },
-          },
-          {
-            id: 'roads',
-            name: 'Routes',
-            data: roadData,
-            visible: true,
-            interactive: true,
-            selectedStyle: { color: '#10b981', weight: 5, fillOpacity: 0 },
-          },
-        ]);
-
-        const engine = new SimulationEngine(roadData.features);
-        engine.setOnUpdate((positions: VehiclePosition[]) => {
-          setPositionsRef.current(positions);
-        });
-        engineRef.current = engine;
-        setLoading(false);
-      } catch {
-        const roadData = getRoadsGeoJSON();
-        const engine = new SimulationEngine(roadData.features);
-        engine.setOnUpdate((positions: VehiclePosition[]) => {
-          setPositionsRef.current(positions);
-        });
-        engineRef.current = engine;
-        setLayers([
-          {
-            id: 'roads',
-            name: 'Routes',
-            data: roadData,
-            visible: true,
-            interactive: true,
-            selectedStyle: { color: '#10b981', weight: 5, fillOpacity: 0 },
-          },
-        ]);
-        setLoading(false);
-      }
+    if (!roadsLoaded && !roadsLoading) {
+      loadRoads();
     }
-    init();
+  }, [roadsLoaded, roadsLoading, loadRoads]);
+
+  // ✅ Initialisation des layers une fois les routes chargées
+  useEffect(() => {
+    if (!roadsLoaded) return;
+
+    let cancelled = false;
+    try {
+      const boundaryData = loadBoundaryFromJson();
+      const maskData = createBoundaryMask(boundaryData);
+      const roadData = getRoadsGeoJSON();
+
+      if (cancelled) return;
+
+      setLayers([
+        {
+          id: 'boundary-mask',
+          name: 'Extérieur (masque noir)',
+          data: maskData as unknown as GeoJSONCollection,
+          visible: true,
+          interactive: false,
+          style: { color: 'transparent', fillColor: '#000000', fillOpacity: 0.55 },
+        },
+        {
+          id: 'boundary-line',
+          name: 'Limite Fianarantsoa',
+          data: boundaryData as GeoJSONCollection,
+          visible: true,
+          interactive: false,
+          style: { color: '#000000', weight: 2.5, fillColor: 'transparent', fillOpacity: 0 },
+        },
+        {
+          id: 'roads',
+          name: 'Routes',
+          data: roadData,
+          visible: true,
+          interactive: true,
+          selectedStyle: { color: '#10b981', weight: 5, fillOpacity: 0 },
+        },
+      ]);
+
+      const engine = new SimulationEngine(roadData.features);
+      engine.setOnUpdate((positions: VehiclePosition[]) => {
+        setPositionsRef.current(positions);
+      });
+      engineRef.current = engine;
+      setLoading(false);
+    } catch (err: any) {
+      console.error('Erreur initialisation:', err);
+      setLoadError(err?.message || 'Erreur de chargement');
+      setLoading(false);
+    }
+
     return () => {
       cancelled = true;
       engineRef.current?.stop();
     };
-  }, []);
+  }, [roadsLoaded]);
 
   const handleFeatureClick = useCallback((featureId: string, _layerId: string) => {
     setSelectedRoads((prev) => {
@@ -164,9 +289,6 @@ export default function Simulation() {
     });
   }, []);
 
-  // ── Map initialization (stable) ──────────────────────────────────────────
-  // Depends on `loading` because the container div is not in the DOM while loading is true.
-  // The guard `mapRef.current` ensures the map is created only once.
   useEffect(() => {
     if (loading) return;
     if (!containerRef.current || mapRef.current) return;
@@ -187,7 +309,6 @@ export default function Simulation() {
     };
   }, [loading]);
 
-  // ── Tile Layer Switcher ──────────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !tileRef.current) return;
@@ -196,7 +317,6 @@ export default function Simulation() {
     tileRef.current = L.tileLayer(TILES[tileKey].url, { attribution: TILES[tileKey].attribution, maxZoom: 19 }).addTo(map);
   }, [tileKey]);
 
-  // ── Sync GeoJSON Layers ──────────────────────────────────────────────────
   const prevLayersJson = useRef('');
   useEffect(() => {
     const map = mapRef.current;
@@ -252,7 +372,6 @@ export default function Simulation() {
     });
   }, [layers, handleFeatureClick]);
 
-  // ── Sync Selected Feature Styles ─────────────────────────────────────────
   useEffect(() => {
     layerMapRef.current.forEach((geoLayer, layerId) => {
       const layerConfig = layers.find((l) => l.id === layerId);
@@ -345,10 +464,25 @@ export default function Simulation() {
 
   const simRunningRoads = configs.filter((c) => c.running);
 
-  if (loading) {
+  if (loading || roadsLoading) {
     return (
-      <div className="h-full flex items-center justify-center text-gray-400 text-sm">
-        Chargement de la simulation...
+      <div className="h-full flex flex-col items-center justify-center text-gray-400 text-sm gap-2">
+        <div className="w-5 h-5 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+        Chargement des routes...
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-red-500 text-sm gap-3 p-4">
+        <p className="text-center">{loadError}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="text-xs px-3 py-1.5 rounded border border-red-200 text-red-500 hover:bg-red-50 cursor-pointer"
+        >
+          Réessayer
+        </button>
       </div>
     );
   }
@@ -357,10 +491,8 @@ export default function Simulation() {
     <div className="h-full">
       <div className="flex flex-col-reverse lg:grid lg:grid-cols-[1fr_320px] gap-3 h-full">
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col shadow-sm relative h-64 lg:h-auto lg:flex-1">
-          {/* Leaflet Map Target */}
           <div ref={containerRef} className="w-full h-full" />
-          
-          {/* Tile Selector */}
+
           {layers.length > 0 && (
             <div className="absolute top-2 left-2 z-[1000] flex gap-1">
               {(Object.keys(TILES) as TileKey[]).map((k) => (
@@ -379,7 +511,6 @@ export default function Simulation() {
             </div>
           )}
 
-          {/* Overlays */}
           {selectedRoads.size === 0 && (
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-white/90 backdrop-blur px-4 py-2 rounded-full shadow text-xs text-gray-500 border border-gray-200 pointer-events-none">
               Cliquez sur une route pour la sélectionner
