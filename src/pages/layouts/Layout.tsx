@@ -35,6 +35,10 @@ const routeConfig: Record<string, { title: string; description: string }> = {
   '/dashboard/deviation': {
     title: 'Déviation d\'itinéraire',
     description: 'Planificateur de déviations - Fianarantsoa'
+  },
+  '/dashboard/fokontany': {
+    title: 'Fokontany',
+    description: 'Limites administratives - Fianarantsoa'
   }
 };
 
