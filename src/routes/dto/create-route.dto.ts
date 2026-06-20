@@ -1,5 +1,26 @@
-import { IsString, IsNotEmpty, IsNumber, IsArray, ArrayMinSize } from 'class-validator';
+import {
+  IsString, IsNotEmpty, IsNumber, IsArray, ArrayMinSize, Validate,
+  ValidatorConstraint, ValidatorConstraintInterface,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+
+@ValidatorConstraint({ name: 'isCoordinateArray', async: false })
+class IsCoordinateArrayConstraint implements ValidatorConstraintInterface {
+  validate(value: unknown): boolean {
+    if (!Array.isArray(value)) return false;
+    return value.every(
+      (coord) =>
+        Array.isArray(coord) &&
+        coord.length === 2 &&
+        typeof coord[0] === 'number' && !isNaN(coord[0]) &&
+        typeof coord[1] === 'number' && !isNaN(coord[1]),
+    );
+  }
+
+  defaultMessage(): string {
+    return 'coordinates must be an array of [lat, lng] pairs';
+  }
+}
 
 export class CreateRouteDto {
   @ApiProperty({ description: 'Nom de la route', example: 'Route RN1 - Tana vers Itasy' })
@@ -20,7 +41,7 @@ export class CreateRouteDto {
   })
   @IsArray()
   @ArrayMinSize(2)
-  @IsNumber({}, { each: true })
+  @Validate(IsCoordinateArrayConstraint)
   coordinates!: number[][];
 
   @ApiProperty({ description: 'Distance totale en km', example: 15.3 })
