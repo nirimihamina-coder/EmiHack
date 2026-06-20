@@ -13,6 +13,11 @@ async function bootstrap() {
     new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
   );
 
+  const httpAdapter = app.getHttpAdapter();
+  httpAdapter.get('/', (req: any, res: any) => {
+    res.sendFile('osmr.html', { root: process.cwd() });
+  });
+
   const config = new DocumentBuilder()
     .setTitle('Tana Traffic - Signalements')
     .setDescription('API de signalement en temps réel pour les transports à Antananarivo')
