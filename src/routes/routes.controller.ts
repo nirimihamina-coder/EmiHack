@@ -19,6 +19,13 @@ export class RoutesController {
     return this.routesService.create(createRouteDto);
   }
 
+  @Get('all')
+  @ApiOperation({ summary: 'Lister toutes les routes avec les coordonnées' })
+  @ApiResponse({ status: 200, description: 'Liste complète des routes', type: [Route] })
+  async findAllWithCoords() {
+    return this.routesService.findAll();
+  }
+
   @Get()
   @ApiOperation({ summary: 'Lister les routes (sans les coordonnées)' })
   @ApiResponse({ status: 200, description: 'Liste des routes avec URL vers les coordonnées' })
