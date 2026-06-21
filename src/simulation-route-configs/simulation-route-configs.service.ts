@@ -19,7 +19,8 @@ export class SimulationRouteConfigsService {
       vehicleCount: dto.vehicleCount ?? 10,
       avgSpeed: dto.avgSpeed,
     });
-    return this.repository.save(entity);
+    const saved = await this.repository.save(entity);
+    return this.findOne(saved.id);
   }
 
   async findAll(): Promise<SimulationRouteConfig[]> {
@@ -51,7 +52,8 @@ export class SimulationRouteConfigsService {
     if (dto.routeId) (entity as any).route = { id: dto.routeId };
     if (dto.vehicleCount !== undefined) entity.vehicleCount = dto.vehicleCount;
     if (dto.avgSpeed !== undefined) entity.avgSpeed = dto.avgSpeed;
-    return this.repository.save(entity);
+    await this.repository.save(entity);
+    return this.findOne(id);
   }
 
   async remove(id: string): Promise<void> {

@@ -36,6 +36,13 @@ export class ReportsController {
     return this.reportsService.findAll(query);
   }
 
+  @Get('all')
+  @ApiOperation({ summary: 'Lister tous les signalements (sans paramètres)' })
+  @ApiResponse({ status: 200, description: 'Liste complète', type: [Report] })
+  findAllSimple() {
+    return this.reportsService.findAllSimple();
+  }
+
   @Get('stats')
   @ApiOperation({ summary: 'Statistiques des signalements' })
   @ApiResponse({ status: 200, description: 'Statistiques' })

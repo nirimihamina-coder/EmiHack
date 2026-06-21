@@ -61,6 +61,13 @@ export class ReportsService {
     return reports;
   }
 
+  async findAllSimple(): Promise<Report[]> {
+    return this.reportRepository.find({
+      relations: { route: true },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
   async findById(id: string): Promise<Report> {
     const report = await this.reportRepository.findOne({
       where: { id },
