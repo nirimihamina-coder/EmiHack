@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SimulationRouteConfig } from './simulation-route-config.entity';
 import { CreateSimulationRouteConfigDto } from './dto/create-simulation-route-config.dto';
+import { UpdateSimulationRouteConfigDto } from './dto/update-simulation-route-config.dto';
 
 @Injectable()
 export class SimulationRouteConfigsService {
@@ -42,6 +43,15 @@ export class SimulationRouteConfigsService {
       where: { scenario: { id: scenarioId } },
       relations: { scenario: true, route: true },
     });
+  }
+
+  async update(id: string, dto: UpdateSimulationRouteConfigDto): Promise<SimulationRouteConfig> {
+    const entity = await this.findOne(id);
+    if (dto.scenarioId) (entity as any).scenario = { id: dto.scenarioId };
+    if (dto.routeId) (entity as any).route = { id: dto.routeId };
+    if (dto.vehicleCount !== undefined) entity.vehicleCount = dto.vehicleCount;
+    if (dto.avgSpeed !== undefined) entity.avgSpeed = dto.avgSpeed;
+    return this.repository.save(entity);
   }
 
   async remove(id: string): Promise<void> {

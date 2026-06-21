@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SimulationScenario } from './simulation-scenario.entity';
 import { CreateSimulationScenarioDto } from './dto/create-simulation-scenario.dto';
+import { UpdateSimulationScenarioDto } from './dto/update-simulation-scenario.dto';
 
 @Injectable()
 export class SimulationScenariosService {
@@ -24,6 +25,12 @@ export class SimulationScenariosService {
     const entity = await this.repository.findOne({ where: { id } });
     if (!entity) throw new NotFoundException('Scénario non trouvé');
     return entity;
+  }
+
+  async update(id: string, dto: UpdateSimulationScenarioDto): Promise<SimulationScenario> {
+    const entity = await this.findOne(id);
+    Object.assign(entity, dto);
+    return this.repository.save(entity);
   }
 
   async remove(id: string): Promise<void> {

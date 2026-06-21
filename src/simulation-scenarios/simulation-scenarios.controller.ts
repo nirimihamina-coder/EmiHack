@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Delete, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger';
 import { SimulationScenariosService } from './simulation-scenarios.service';
 import { SimulationScenario } from './simulation-scenario.entity';
 import { CreateSimulationScenarioDto } from './dto/create-simulation-scenario.dto';
+import { UpdateSimulationScenarioDto } from './dto/update-simulation-scenario.dto';
 
 @ApiTags('Simulation-Scenarios')
 @Controller('simulation-scenarios')
@@ -32,6 +33,16 @@ export class SimulationScenariosController {
   @ApiResponse({ status: 404, description: 'Scénario non trouvé' })
   findOne(@Param('id') id: string) {
     return this.service.findOne(id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: "Modifier un scénario" })
+  @ApiParam({ name: 'id', type: String })
+  @ApiBody({ type: UpdateSimulationScenarioDto })
+  @ApiResponse({ status: 200, description: 'Scénario modifié', type: SimulationScenario })
+  @ApiResponse({ status: 404, description: 'Scénario non trouvé' })
+  update(@Param('id') id: string, @Body() dto: UpdateSimulationScenarioDto) {
+    return this.service.update(id, dto);
   }
 
   @Delete(':id')
