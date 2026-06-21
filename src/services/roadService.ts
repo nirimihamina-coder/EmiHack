@@ -41,36 +41,42 @@ function toLonLat(coord: number[]): [number, number] {
 }
 
 // Normalise les coordonnées reçues de l'API en format GeoJSON [lon, lat]
-function normalizeCoordinates(raw: any): number[][] {
-  if (!Array.isArray(raw)) return [];
+function normalizeCoordinates(raw: unknown): number[][] {
+  if (!raw || typeof raw !== 'object') return [];
 
-  // Cas 1 : tableau de nombres → un seul point (inhabituel)
-  if (raw.length > 0 && typeof raw[0] === 'number') {
-    return [toLonLat(raw)];
+  const candidate = raw as {
+    type?: string;
+    coordinates?: unknown;
+    geometry?: unknown;
+    features?: unknown[];
+  };
+
+  if (Array.isArray(raw)) {
+    if (raw.length > 0 && typeof raw[0] === 'number') {
+      return [toLonLat(raw as number[])];
+    }
+    return (raw as number[][]).map(toLonLat);
   }
 
-  // Cas 2 : tableau de tableaux
-  if (raw.type === 'LineString' && Array.isArray(raw.coordinates)) {
-    return (raw.coordinates as number[][]).map(toLonLat);
+  if (candidate.type === 'LineString' && Array.isArray(candidate.coordinates)) {
+    return (candidate.coordinates as number[][]).map(toLonLat);
   }
-  if (raw.type === 'MultiLineString' && Array.isArray(raw.coordinates)) {
-    // On prend la première ligne (cas le plus courant pour une route)
-    return (raw.coordinates[0] as number[][]).map(toLonLat);
+  if (candidate.type === 'MultiLineString' && Array.isArray(candidate.coordinates)) {
+    const firstLine = (candidate.coordinates as number[][][])[0] ?? [];
+    return firstLine.map(toLonLat);
   }
-  if (raw.type === 'Feature' && raw.geometry) {
-    return normalizeCoordinates(raw.geometry);
+  if (candidate.type === 'Feature' && candidate.geometry) {
+    return normalizeCoordinates(candidate.geometry);
   }
-  if (raw.type === 'FeatureCollection' && Array.isArray(raw.features)) {
-    // Concatène toutes les lignes
+  if (candidate.type === 'FeatureCollection' && Array.isArray(candidate.features)) {
     const all: number[][] = [];
-    for (const f of raw.features) {
+    for (const f of candidate.features) {
       all.push(...normalizeCoordinates(f));
     }
     return all;
   }
 
-  // Tableau de coordonnées
-  return (raw as number[][]).map(toLonLat);
+  return [];
 }
 
 // ── API calls ────────────────────────────────────────────────────────────────

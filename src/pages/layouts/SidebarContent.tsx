@@ -10,7 +10,7 @@ const navItems = [
   { to: '/dashboard/carte', icon: MapIcon, label: 'Cartes' },
   { to: '/dashboard/deviation', icon: Route, label: 'Déviation' },
   { to: '/dashboard/fokontany', icon: Globe, label: 'Fokontany' },
-  { to: '/dashboard/simulation', icon: SigmaSquareIcon, label: 'Simulation' }
+  { to: '/dashboard/simulation', icon: SigmaSquareIcon, label: 'Simulation' },
 ];
 
 // Images de fond pour le slideshow - Tes liens exacts

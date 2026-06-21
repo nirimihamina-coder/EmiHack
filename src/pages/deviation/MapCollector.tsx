@@ -30,7 +30,6 @@ const MapCollector: React.FC = () => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [points, setPoints] = useState<Point[]>([]);
   const [routeLayer, setRouteLayer] = useState<L.Layer | null>(null);
-  const [lastGeoJSON, setLastGeoJSON] = useState<GeoJSONFeature | null>(null);
   const [markers, setMarkers] = useState<L.Marker[]>([]);
   const [isExportDisabled, setIsExportDisabled] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
@@ -175,7 +174,6 @@ const MapCollector: React.FC = () => {
       });
 
       const data = await response.json();
-      setLastGeoJSON(data);
 
       if (data.features && data.features.length > 0) {
         // Supprimer l'ancien layer de route
@@ -330,7 +328,6 @@ const MapCollector: React.FC = () => {
 
     // Réinitialiser les états
     setPoints([]);
-    setLastGeoJSON(null);
     setRouteData(null);
     setIsExportDisabled(true);
     setExportStatus({ message: '', type: '' });
