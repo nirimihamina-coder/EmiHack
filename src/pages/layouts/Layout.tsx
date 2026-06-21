@@ -48,7 +48,7 @@ const Layout = () => {
 
   // Obtenir la configuration de la route actuelle
   const currentRoute = routeConfig[location.pathname] || {
-    title: 'Mon App',
+    title: "Traffic-Lab",
     description: 'Bienvenue sur votre espace de travail'
   };
 

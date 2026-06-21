@@ -69,8 +69,8 @@ const SidebarContent = ({ collapsed = false, onNavClick }: SidebarContentProps) 
             <LayoutDashboard size={16} className="text-white" />
           </div>
           {!collapsed && (
-            <span className="font-semibold text-gray-900 text-sm whitespace-nowrap transition-opacity duration-200">
-              Mon App
+            <span className="font-semibold text-gray-900 text- font-poppins whitespace-nowrap transition-opacity duration-200">
+              Traffic-Lab
             </span>
           )}
         </div>
@@ -86,7 +86,7 @@ const SidebarContent = ({ collapsed = false, onNavClick }: SidebarContentProps) 
         <div className="px-2 py-3 border-t border-gray-200/60">
           <button
             onClick={() => openModal('logout')}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all duration-300 relative z-10"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium bg-red-50 hover:text-red-600 text-red-900 cursor-pointer transition-all duration-300 relative z-10"
           >
             <LogOut size={18} className="flex-shrink-0" />
             {!collapsed && <span className="line-clamp-1">Se déconnecter</span>}
