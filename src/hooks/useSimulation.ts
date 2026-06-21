@@ -176,7 +176,6 @@ export interface UseSimulationReturn {
   intersectionStates: IntersectionState[];
 }
 
-// ✅ NOUVEAU : Fonction pour fusionner les segments de MultiLineString
 function flattenMultiLineString(lines: number[][][]): number[][] {
   if (lines.length === 0) return [];
   const result: number[][] = [];
@@ -228,11 +227,11 @@ const syncEngine = useCallback(() => {
   if (!engine || !mapRef.current) return;
   
   const configs = useSimulationScenariosStore.getState().configs;
+  if (!Array.isArray(configs)) return;
+  
   const json = JSON.stringify(configs.map((c) => ({ id: c.id, vehicleCount: c.vehicleCount, avgSpeed: c.avgSpeed })));
   
-  if (json === prevConfigsJson.current) {
-    return;
-  }
+  if (json === prevConfigsJson.current) return;
   prevConfigsJson.current = json;
 
   engine.reset();
@@ -240,86 +239,70 @@ const syncEngine = useCallback(() => {
   const roadGeoJSON = getRoadsGeoJSON() as unknown as GeoJSONCollection;
   const allFeatures = (roadGeoJSON as any)?.features ?? [];
 
-  let successCount = 0;
-  let failCount = 0;
-
   for (const cfg of configs) {
-    
-    if (cfg.route?.coordinates) {
-      // ✅ DÉTECTION AUTOMATIQUE du format des coordonnées
-      const firstCoord = cfg.route.coordinates[0];
-      const firstLat = firstCoord[0];
-      const firstLng = firstCoord[1];
+    try {
+      const coords = cfg?.route?.coordinates;
       
-      
-      let path: [number, number][];
-      
-      // Si le premier élément est entre -90 et 90, c'est probablement une latitude
-      // Si le deuxième élément est entre -90 et 90, c'est probablement une latitude
-      if (Math.abs(firstLat) <= 90 && Math.abs(firstLng) > 90) {
-        // Format [lat, lng] - pas de conversion nécessaire
-        path = cfg.route.coordinates.map(([lat, lng]) => [lat, lng] as [number, number]);
-      } else if (Math.abs(firstLng) <= 90 && Math.abs(firstLat) > 90) {
-        // Format [lng, lat] - conversion nécessaire
-        path = cfg.route.coordinates.map(([lng, lat]) => [lat, lng] as [number, number]);
-      } else {
-        // Cas ambigu, on suppose [lat, lng]
-        path = cfg.route.coordinates.map(([lat, lng]) => [lat, lng] as [number, number]);
-      }
-      
-      
-      const success = engine.setRoadPath(cfg.routeId, path);
-      
-      if (success) {
-        engine.addConfig({
-          roadId: cfg.routeId,
-          roadName: '',
-          vehicleCount: cfg.vehicleCount,
-          speed: cfg.avgSpeed ?? 40,
-          running: true,
-        });
-        successCount++;
-      } else {
-        failCount++;
-      }
-    } else {
-      const feat = allFeatures.find((f: any) => f.properties?.id === cfg.routeId);
-      if (feat?.geometry) {
-        let coords: [number, number][] = [];
+      if (Array.isArray(coords) && coords.length > 0) {
+        const firstCoord = coords[0];
         
-        if (feat.geometry.type === 'LineString') {
-          // GeoJSON est TOUJOURS en [lng, lat] selon la spec
-          coords = (feat.geometry.coordinates as number[][]).map(([lng, lat]) => [lat, lng] as [number, number]);
-        } else if (feat.geometry.type === 'MultiLineString') {
-          const lines = feat.geometry.coordinates as number[][][];
-          const flatCoords = flattenMultiLineString(lines);
-          coords = flatCoords.map(([lng, lat]) => [lat, lng] as [number, number]);
-        }
+        if (!Array.isArray(firstCoord) || firstCoord.length < 2) continue;
         
-        if (coords.length >= 2) {
-          const success = engine.setRoadPath(cfg.routeId, coords);
-          
-          if (success) {
-            engine.addConfig({
-              roadId: cfg.routeId,
-              roadName: '',
-              vehicleCount: cfg.vehicleCount,
-              speed: cfg.avgSpeed ?? 40,
-              running: true,
-            });
-            successCount++;
-          } else {
-            failCount++;
-          }
+        const firstLat = firstCoord[0];
+        const firstLng = firstCoord[1];
+        
+        let path: [number, number][];
+        
+        if (Math.abs(firstLat) <= 90 && Math.abs(firstLng) > 90) {
+          path = coords.map((c: number[]) => [c[0], c[1]] as [number, number]);
+        } else if (Math.abs(firstLng) <= 90 && Math.abs(firstLat) > 90) {
+          path = coords.map((c: number[]) => [c[1], c[0]] as [number, number]);
         } else {
-          failCount++;
+          path = coords.map((c: number[]) => [c[0], c[1]] as [number, number]);
+        }
+        
+        const success = engine.setRoadPath(cfg.routeId, path);
+        
+        if (success) {
+          engine.addConfig({
+            roadId: cfg.routeId,
+            roadName: '',
+            vehicleCount: cfg.vehicleCount,
+            speed: cfg.avgSpeed ?? 40,
+            running: true,
+          });
         }
       } else {
-        failCount++;
+        const feat = allFeatures.find((f: any) => f.properties?.id === cfg.routeId);
+        if (feat?.geometry) {
+          let coords: [number, number][] = [];
+          
+          if (feat.geometry.type === 'LineString') {
+            coords = (feat.geometry.coordinates as number[][]).map(([lng, lat]) => [lat, lng] as [number, number]);
+          } else if (feat.geometry.type === 'MultiLineString') {
+            const lines = feat.geometry.coordinates as number[][][];
+            const flatCoords = flattenMultiLineString(lines);
+            coords = flatCoords.map(([lng, lat]) => [lat, lng] as [number, number]);
+          }
+          
+          if (coords.length >= 2) {
+            const success = engine.setRoadPath(cfg.routeId, coords);
+            if (success) {
+              engine.addConfig({
+                roadId: cfg.routeId,
+                roadName: '',
+                vehicleCount: cfg.vehicleCount,
+                speed: cfg.avgSpeed ?? 40,
+                running: true,
+              });
+            }
+          }
+        }
       }
+    } catch (err) {
+      console.error('Erreur syncEngine pour config:', cfg, err);
     }
   }
-  
   
   if (configs.length > 0) {
     engine.start();
@@ -445,8 +428,6 @@ const syncEngine = useCallback(() => {
     });
   }, [selectedRoads, layers, roadCongestion]);
 
-  /* ── Congestion zone markers ───────────────────────────────── */
-
   useEffect(() => {
     const map = mapRef.current;
     const roadsLayer = layerMapRef.current.get('roads');
@@ -510,8 +491,6 @@ const syncEngine = useCallback(() => {
     });
   }, [roadCongestion]);
 
-  /* ── Pulse animation for congestion zones ──────────────────── */
-
   useEffect(() => {
     let tick = 0;
     let running = true;
@@ -546,8 +525,6 @@ const syncEngine = useCallback(() => {
     };
   }, []);
 
-  /* ── Simulation Engine + sync ──────────────────────────────── */
-
   useEffect(() => {
     if (loading || !mapRef.current) return;
     const roadGeoJSON = getRoadsGeoJSON() as unknown as GeoJSONCollection;
@@ -558,15 +535,9 @@ const syncEngine = useCallback(() => {
     vehicleLayerRef.current = L.layerGroup().addTo(mapRef.current);
 
     engine.setOnUpdate((positions: VehiclePosition[]) => {
-
-      if (positions.length > 0) {
-        const firstPos = positions[0];
-      }
-
       const markers = vehicleMarkersRef.current;
       const newIds = new Set(positions.map((p) => p.id));
 
-      // Supprimer les anciens markers
       markers.forEach((m, id) => {
         if (!newIds.has(id)) {
           mapRef.current?.removeLayer(m);
@@ -574,15 +545,12 @@ const syncEngine = useCallback(() => {
         }
       });
 
-      // Ajouter/mettre à jour les nouveaux markers
       positions.forEach((p) => {
         const existing = markers.get(p.id);
         if (existing) {
           existing.setLatLng([p.lat, p.lng]);
         } else {
-
           if (!vehicleLayerRef.current) {
-            console.error('  ❌ vehicleLayerRef.current est null!');
             return;
           }
 
@@ -603,10 +571,6 @@ const syncEngine = useCallback(() => {
           markers.set(p.id, marker);
         }
       });
-
-      if (positions.length > 0 && markers.size !== positions.length) {
-        console.warn(`  ⚠️ Désynchronisation: ${positions.length} positions, ${markers.size} markers`);
-      }
     });
 
     (async () => {
@@ -677,56 +641,61 @@ const syncEngine = useCallback(() => {
     };
   }, [loading, syncEngine]);
 
-  useEffect(() => {
-    syncEngine();
-  }, [syncEngine, simStore.configs]);
+useEffect(() => {
+  syncEngine();
+}, [syncEngine, simStore.configs]);
 
-  useEffect(() => {
-    if (simStore.configs.length === 0) { setBottlenecks([]); setSuggestions([]); setRoadCongestion(new Map()); setIntersectionStates([]); return; }
-    const poll = () => {
+useEffect(() => {
+  const configs = simStore.configs ?? [];
+  if (configs.length === 0) { 
+    setBottlenecks([]); 
+    setSuggestions([]); 
+    setRoadCongestion(new Map()); 
+    setIntersectionStates([]); 
+    return; 
+  }
+  const poll = () => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    setBottlenecks(engine.getBottlenecks());
+    setSuggestions(engine.getSuggestions());
+    const cong = engine.getRoadCongestion();
+    setRoadCongestion(new Map(cong.map((c) => [c.roadId, c])));
+    setIntersectionStates(engine.getIntersectionStates());
+  };
+  poll();
+  const id = setInterval(poll, 5000);
+  return () => clearInterval(id);
+}, [simStore.configs?.length ?? 0]);
+
+useEffect(() => {
+  const configs = simStore.configs ?? [];
+  if (configs.length === 0) return;
+  const pollIncidents = async () => {
+    try {
+      const { data: reps } = await axiosInstance.get('/reports/all');
       const engine = engineRef.current;
-      if (!engine) return;
-      setBottlenecks(engine.getBottlenecks());
-      setSuggestions(engine.getSuggestions());
-      const cong = engine.getRoadCongestion();
-      setRoadCongestion(new Map(cong.map((c) => [c.roadId, c])));
-      setIntersectionStates(engine.getIntersectionStates());
-    };
-    poll();
-    const id = setInterval(poll, 5000);
-    return () => clearInterval(id);
-  }, [simStore.configs.length]);
+      if (!engine || !Array.isArray(reps)) return;
 
-  /* ── Poll incidents from API ──────────────────────────────── */
-  useEffect(() => {
-    if (simStore.configs.length === 0) return;
-    const pollIncidents = async () => {
-      try {
-        const { data: reps } = await axiosInstance.get('/reports/all');
-        const engine = engineRef.current;
-        if (!engine || !Array.isArray(reps)) return;
-
-        const active: TrafficIncident[] = reps
-          .filter((r: any) => r.status === 'active' && (r.routeId ?? r.route?.id))
-          .map((r: any) => ({
-            id: r.id,
-            routeId: r.routeId ?? r.route?.id,
-            type: r.type,
-            severity: r.severity,
-            positionOnRoute: Number(r.positionOnRoute ?? 50),
-            lanesBlocked: r.lanesBlocked ?? 0,
-            active: true,
-          }));
-        engine.setIncidents(active);
-        setIncidentMarkers(reps);
-      } catch { /* ignore */ }
-    };
-    pollIncidents();
-    const id = setInterval(pollIncidents, 10000);
-    return () => clearInterval(id);
-  }, [simStore.configs.length]);
-
-  /* ── Intersection & Incident markers ──────────────────────── */
+      const active: TrafficIncident[] = reps
+        .filter((r: any) => r.status === 'active' && (r.routeId ?? r.route?.id))
+        .map((r: any) => ({
+          id: r.id,
+          routeId: r.routeId ?? r.route?.id,
+          type: r.type,
+          severity: r.severity,
+          positionOnRoute: Number(r.positionOnRoute ?? 50),
+          lanesBlocked: r.lanesBlocked ?? 0,
+          active: true,
+        }));
+      engine.setIncidents(active);
+      setIncidentMarkers(reps);
+    } catch { /* ignore */ }
+  };
+  pollIncidents();
+  const id = setInterval(pollIncidents, 10000);
+  return () => clearInterval(id);
+}, [simStore.configs?.length ?? 0]);
 
   useEffect(() => {
     const map = mapRef.current;

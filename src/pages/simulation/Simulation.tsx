@@ -27,7 +27,9 @@ export default function Simulation() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editVals, setEditVals] = useState<{ vehicleCount: number; avgSpeed: number }>({ vehicleCount: 10, avgSpeed: 40 });
 
-  const configuredRoadIds = new Set(configs.map((c) => c.routeId));
+  // ✅ CORRECTION : Protéger contre configs undefined
+  const safeConfigs = configs ?? [];
+  const configuredRoadIds = new Set(safeConfigs.map((c) => c.routeId));
   const unselectedRoadObjects = selectedRoadObjects.filter((r) => !configuredRoadIds.has(r.id));
 
   useEffect(() => { simStore.init(); }, []);
@@ -68,9 +70,9 @@ export default function Simulation() {
           )}
 
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1000] bg-white/90 backdrop-blur px-4 py-2 rounded-full shadow text-xs text-gray-500 border border-gray-200 pointer-events-none">
-            {selectedRoads.size === 0 && configs.length === 0
+            {selectedRoads.size === 0 && safeConfigs.length === 0
               ? 'Cliquez sur une route pour configurer une simulation'
-              : `${configs.length} route${configs.length > 1 ? 's' : ''} configurée${configs.length > 1 ? 's' : ''}`}
+              : `${safeConfigs.length} route${safeConfigs.length > 1 ? 's' : ''} configurée${safeConfigs.length > 1 ? 's' : ''}`}
           </div>
         </div>
 
@@ -87,7 +89,7 @@ export default function Simulation() {
               <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-1">Simulation</p>
               <h2 className="text-lg font-bold text-gray-800">Trafic Fianarantsoa</h2>
             </div>
-            {(scenario || configs.length > 0) && (
+            {(scenario || safeConfigs.length > 0) && (
               <button onClick={handleReset} disabled={simLoading}
                 className="text-xs px-2.5 py-1 rounded border border-red-200 text-red-500 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer">Reset</button>
             )}
@@ -105,7 +107,7 @@ export default function Simulation() {
           )}
 
           {/* ── Empty state ──────────────────────────────────── */}
-          {unselectedRoadObjects.length === 0 && configs.length === 0 && !scenario && !initializing && (
+          {unselectedRoadObjects.length === 0 && safeConfigs.length === 0 && !scenario && !initializing && (
             <p className="text-xs text-gray-400 leading-relaxed">
               Cliquez sur une route dans la carte pour configurer une simulation.
             </p>
@@ -157,7 +159,7 @@ export default function Simulation() {
           })}
 
           {/* ── Saved config cards ─────────────────────────────── */}
-          {configs.map((cfg) => {
+          {safeConfigs.map((cfg) => {
             const roadName = cfg.route?.name ?? getAllRoads().find((r) => r.id === cfg.routeId)?.name ?? cfg.routeId;
             const isEditing = editingId === cfg.id;
             return (
