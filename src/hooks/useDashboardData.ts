@@ -36,37 +36,83 @@ export interface DashboardData {
   loading: boolean;
 }
 
+const HOURS = ['06h', '07h', '08h', '09h', '10h', '11h', '12h', '13h', '14h', '15h', '16h', '17h', '18h', '19h', '20h'];
+
+type IncidentSeverity = 'critical' | 'high' | 'medium' | 'low';
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function getStatus(
   vehicleCount: number,
   speed: number,
   hasCriticalIncident: boolean,
   hasHighIncident: boolean
 ): 'fluide' | 'dense' | 'saturée' {
-  if (hasCriticalIncident || (speed > 0 && speed < 25)) return 'saturée';
-  if (hasHighIncident || (speed > 0 && speed < 55) || (vehicleCount > 50)) return 'dense';
+  if (hasCriticalIncident || speed <= 25 || vehicleCount >= 75) return 'saturée';
+  if (hasHighIncident || speed <= 45 || vehicleCount >= 45) return 'dense';
   return 'fluide';
 }
 
-function computeCharge(status: 'fluide' | 'dense' | 'saturée'): number {
-  if (status === 'saturée') return 85 + Math.round(Math.random() * 12);
-  if (status === 'dense') return 50 + Math.round(Math.random() * 20);
-  return 15 + Math.round(Math.random() * 20);
+function severityWeight(severity?: string): number {
+  if (severity === 'critical') return 3;
+  if (severity === 'high') return 2;
+  if (severity === 'medium') return 1;
+  return 0;
 }
 
-function generateTrafficEvolution(
-  baseCongestion: number
-): { hour: string; value: number }[] {
-  const hours = ['06h','07h','08h','09h','10h','11h','12h','13h','14h','15h','16h','17h','18h','19h','20h'];
-  const morningPeak = [22, 45, 78, 92, 68, 55];
-  const middayDip = [72, 80, 65, 70];
-  const eveningPeak = [88, 95, 82, 58, 35];
-  const pattern = [...morningPeak, ...middayDip, ...eveningPeak];
+function computeCharge(
+  vehicleCount: number,
+  speed: number,
+  speedLimit: number,
+  severity?: string
+): number {
+  const normalizedSpeed = speedLimit > 0 ? clamp((speed / speedLimit) * 100, 0, 100) : 50;
+  const vehiclePressure = clamp((vehicleCount / 50) * 100, 0, 100);
+  const incidentPenalty = severityWeight(severity) * 15;
+  const charge = Math.round((vehiclePressure * 0.6) + ((100 - normalizedSpeed) * 0.25) + incidentPenalty);
+  return clamp(charge, 0, 100);
+}
 
-  return pattern.map((v, i) => {
-    const noise = Math.sin(Date.now() / 10000 + i) * 5;
-    const congFactor = 1 + (baseCongestion - 0.3) * 0.5;
-    return { hour: hours[i], value: Math.round(Math.min(100, v * congFactor + noise)) };
+function generateTrafficEvolution(baseValue: number, routeCharges: number[]) {
+  return HOURS.map((hour, index) => {
+    const routeOffset = routeCharges[index % Math.max(routeCharges.length, 1)] || 0;
+    const wave = Math.round(Math.sin(index / 1.8) * 8 + Math.cos(index / 3.4) * 6);
+    const value = clamp(Math.round(baseValue * 0.7 + routeOffset * 0.3 + wave), 0, 100);
+    return { hour, value };
   });
+}
+
+function buildVehicleBreakdown(totalVehicles: number): VehicleBreakdownItem[] {
+  const values = [
+    { label: 'Voitures', ratio: 0.68 },
+    { label: 'Motos', ratio: 0.18 },
+    { label: 'Vélos', ratio: 0.09 },
+    { label: 'Bus', ratio: 0.05 },
+  ];
+
+  let remaining = totalVehicles;
+  const breakdown = values.map((item, index) => {
+    const value = Math.max(0, Math.round(totalVehicles * item.ratio));
+    remaining -= value;
+    return {
+      label: item.label,
+      value,
+      pct: totalVehicles > 0 ? Math.round((value / totalVehicles) * 100) : 0,
+      color: ['from-blue-400 to-blue-500', 'from-amber-400 to-orange-400', 'from-emerald-400 to-teal-400', 'from-violet-400 to-purple-400'][index],
+      bg: ['bg-blue-50', 'bg-amber-50', 'bg-emerald-50', 'bg-violet-50'][index],
+      text: ['text-blue-600', 'text-amber-600', 'text-emerald-600', 'text-violet-600'][index],
+      icon: ['🚗', '🏍️', '🚲', '🚌'][index],
+    };
+  });
+
+  if (remaining > 0) {
+    breakdown[0].value += remaining;
+    breakdown[0].pct = totalVehicles > 0 ? Math.round((breakdown[0].value / totalVehicles) * 100) : 0;
+  }
+
+  return breakdown;
 }
 
 export function useDashboardData(pollInterval = 5000): DashboardData {
@@ -96,29 +142,38 @@ export function useDashboardData(pollInterval = 5000): DashboardData {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [configsRes, reportsRes, apiRoutes] = await Promise.all([
+        const store = useRoadsStore.getState();
+        const [configsRes, reportsRes, resultsRes, scenariosRes, apiRoutes] = await Promise.all([
           axiosInstance.get('/simulation-route-configs').catch(() => ({ data: [] })),
           axiosInstance.get('/reports/all').catch(() => ({ data: [] })),
-          useRoadsStore.getState().apiRoutes.length > 0
-            ? useRoadsStore.getState().apiRoutes
+          axiosInstance.get('/simulation-results').catch(() => ({ data: [] })),
+          axiosInstance.get('/simulation-scenarios').catch(() => ({ data: [] })),
+          store.apiRoutes.length > 0
+            ? Promise.resolve(store.apiRoutes)
             : axiosInstance.get('/routes/all').then((r) => r.data),
         ]);
 
         const configs: any[] = Array.isArray(configsRes.data) ? configsRes.data : [];
         const reports: any[] = Array.isArray(reportsRes.data) ? reportsRes.data : [];
+        const results: any[] = Array.isArray(resultsRes.data) ? resultsRes.data : [];
+        const scenarios: any[] = Array.isArray(scenariosRes.data) ? scenariosRes.data : [];
+        const apiRoutesArr = Array.isArray(apiRoutes) ? apiRoutes : [];
 
-        const activeIncidents = reports.filter(
-          (r: any) => r.status === 'active'
-        );
+        const latestResult = results.sort((a, b) => {
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bTime - aTime;
+        })[0];
 
-        const routeIncidentMap = new Map<string, 'critical' | 'high' | 'medium' | 'low'>();
-        for (const inc of activeIncidents) {
-          const rid = inc.routeId ?? inc.route?.id;
+        const activeIncidents = reports.filter((r: any) => r.status === 'active');
+        const routeIncidentMap = new Map<string, IncidentSeverity>();
+        for (const incident of activeIncidents) {
+          const rid = incident.routeId ?? incident.route?.id;
           if (!rid) continue;
-          const cur = routeIncidentMap.get(rid);
-          const sev = inc.severity;
-          if (!cur || sev === 'critical' || (sev === 'high' && cur !== 'critical')) {
-            routeIncidentMap.set(rid, sev);
+          const current = routeIncidentMap.get(rid);
+          const severity = incident.severity;
+          if (!current || severity === 'critical' || (severity === 'high' && current !== 'critical')) {
+            routeIncidentMap.set(rid, severity);
           }
         }
 
@@ -131,72 +186,84 @@ export function useDashboardData(pollInterval = 5000): DashboardData {
           const rid = cfg.routeId ?? cfg.route?.id;
           if (!rid) continue;
           configByRoute.set(rid, cfg);
-          totalVehicles += cfg.vehicleCount ?? 0;
+          totalVehicles += Number(cfg.vehicleCount || 0);
           if (cfg.avgSpeed) {
-            speedSum += cfg.avgSpeed;
-            speedCount++;
+            speedSum += Number(cfg.avgSpeed);
+            speedCount += 1;
           }
         }
 
         const activeRouteCount = configByRoute.size;
         const avgSpeed = speedCount > 0 ? Math.round(speedSum / speedCount) : 0;
 
-        const apiRoutesArr = Array.isArray(apiRoutes) ? apiRoutes : [];
-
         let mostCongested: { name: string; speed: number; congestion: number } | null = null;
         let worstCharge = 0;
 
-        const routesData: DashboardRoute[] = apiRoutesArr.map((r: any) => {
-          const rid = r.id;
+        const routesData: DashboardRoute[] = apiRoutesArr.map((route: any) => {
+          const rid = route.id;
           const cfg = configByRoute.get(rid);
-          const vCount = cfg?.vehicleCount ?? 0;
-          const speed = cfg?.avgSpeed ?? r.speedLimit ?? 50;
-          const incidentSev = routeIncidentMap.get(rid);
-          const hasCritical = incidentSev === 'critical';
-          const hasHigh = incidentSev === 'high';
-          const status = getStatus(vCount, speed, hasCritical, hasHigh);
-          const charge = computeCharge(status);
+          const vehicleCount = Number(cfg?.vehicleCount || 0);
+          const speedLimit = Number(route.speedLimit || 50);
+          const speed = Number(cfg?.avgSpeed || speedLimit || 50);
+          const incidentSeverity = routeIncidentMap.get(rid);
+          const status = getStatus(
+            vehicleCount,
+            speed,
+            incidentSeverity === 'critical',
+            incidentSeverity === 'high'
+          );
+          const charge = computeCharge(
+            vehicleCount,
+            speed,
+            speedLimit,
+            incidentSeverity
+          );
 
           if (charge > worstCharge) {
             worstCharge = charge;
-            mostCongested = { name: r.name ?? rid.slice(0, 8), speed, congestion: charge };
+            mostCongested = {
+              name: route.name ?? `Route ${rid.slice(0, 8)}`,
+              speed,
+              congestion: charge,
+            };
           }
 
           return {
             id: rid,
-            name: r.name ?? `Route ${rid.slice(0, 8)}`,
-            type: r.type ?? 'unknown',
+            name: route.name ?? `Route ${rid.slice(0, 8)}`,
+            type: route.type ?? 'unknown',
             status,
             speed,
-            vehicles: vCount,
+            vehicles: vehicleCount,
             charge,
           };
         });
 
-        const totalSimVehicles = totalVehicles || Math.max(1, activeRouteCount * 50);
-        const breakdownTotal = totalSimVehicles;
+        const latestResultVehicles = Number(latestResult?.totalVehicles || 0);
+        const totalSimVehicles = latestResultVehicles > 0 ? latestResultVehicles : totalVehicles;
+        const baseCongestion = latestResult?.maxCongestionLevel != null
+          ? Number(latestResult.maxCongestionLevel)
+          : (routesData.length > 0
+              ? routesData.reduce((sum, route) => sum + (route.charge / 100), 0) / routesData.length
+              : 0) * 100;
 
-        const vehicleBreakdown: VehicleBreakdownItem[] = [
-          { label: 'Voitures', value: Math.round(breakdownTotal * 0.7), pct: 70, color: 'from-blue-400 to-blue-500', bg: 'bg-blue-50', text: 'text-blue-600', icon: '🚗' },
-          { label: 'Motos', value: Math.round(breakdownTotal * 0.2), pct: 20, color: 'from-amber-400 to-orange-400', bg: 'bg-amber-50', text: 'text-amber-600', icon: '🏍️' },
-          { label: 'Vélos', value: Math.round(breakdownTotal * 0.1), pct: 10, color: 'from-emerald-400 to-teal-400', bg: 'bg-emerald-50', text: 'text-emerald-600', icon: '🚲' },
-          { label: 'Bus', value: Math.round(breakdownTotal * 0.0), pct: 0, color: 'from-violet-400 to-purple-400', bg: 'bg-violet-50', text: 'text-violet-600', icon: '🚌' },
-        ];
+        const trafficEvolution = generateTrafficEvolution(
+          clamp(baseCongestion, 0, 100),
+          routesData.map((route) => route.charge)
+        );
 
-        const baseCongestion = activeRouteCount > 0
-          ? routesData.filter((r) => r.status !== 'fluide').length / activeRouteCount
-          : 0;
+        const vehicleBreakdown = buildVehicleBreakdown(totalSimVehicles);
 
         setData({
           totalVehicles: totalSimVehicles,
           activeRoutes: activeRouteCount,
           totalRoutes: apiRoutesArr.length,
-          averageSpeed: avgSpeed,
+          averageSpeed: avgSpeed || Math.round((routesData.reduce((sum, route) => sum + route.speed, 0) / Math.max(routesData.length, 1)) || 0),
           mostCongested,
           vehicleBreakdown,
           routesData,
-          trafficEvolution: generateTrafficEvolution(baseCongestion),
-          operational: activeRouteCount > 0,
+          trafficEvolution,
+          operational: activeRouteCount > 0 || scenarios.length > 0 || Boolean(latestResult),
           lastUpdate: new Date(),
           loading: false,
         });
