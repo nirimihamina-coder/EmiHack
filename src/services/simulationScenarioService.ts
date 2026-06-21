@@ -26,62 +26,60 @@ export interface SimulationScenario {
 }
 
 export async function fetchScenarios(): Promise<SimulationScenario[]> {
-  console.log('📡 [GET] /api/simulation-scenarios - Récupération des scénarios...');
   try {
-    const res = await axiosInstance.get('/api/simulation-scenarios');
-    console.log('✅ [GET] /api/simulation-scenarios - Succès:', res.data.length, 'scénarios');
+    const res = await axiosInstance.get('/simulation-scenarios');
     return res.data;
   } catch (err) {
-    console.error('❌ [GET] /api/simulation-scenarios - Erreur:', err);
+    console.error('❌ [GET] /simulation-scenarios - Erreur:', err);
     throw err;
   }
 }
 
 export async function createScenario(scenario: Omit<SimulationScenario, 'id' | 'createdAt'>): Promise<SimulationScenario> {
-  console.log('📡 [POST] /api/simulation-scenarios - Création du scénario:', scenario.name);
+  console.log('📡 [POST] /simulation-scenarios - Création du scénario:', scenario.name);
   console.log('📦 Payload:', scenario);
   try {
-    const res = await axiosInstance.post('/api/simulation-scenarios', scenario);
-    console.log('✅ [POST] /api/simulation-scenarios - Succès:', res.data);
+    const res = await axiosInstance.post('/simulation-scenarios', scenario);
+    console.log('✅ [POST] /simulation-scenarios - Succès:', res.data);
     return res.data;
   } catch (err) {
-    console.error('❌ [POST] /api/simulation-scenarios - Erreur:', err);
+    console.error('❌ [POST] /simulation-scenarios - Erreur:', err);
     throw err;
   }
 }
 
 export async function updateScenario(id: string, scenario: Partial<SimulationScenario>): Promise<SimulationScenario> {
-  console.log(`📡 [PUT] /api/simulation-scenarios/${id} - Mise à jour du scénario`);
+  console.log(`📡 [PUT] /simulation-scenarios/${id} - Mise à jour du scénario`);
   console.log('📦 Payload:', scenario);
   try {
-    const res = await axiosInstance.put(`/api/simulation-scenarios/${id}`, scenario);
-    console.log('✅ [PUT] /api/simulation-scenarios - Succès:', res.data);
+    const res = await axiosInstance.put(`/simulation-scenarios/${id}`, scenario);
+    console.log('✅ [PUT] /simulation-scenarios - Succès:', res.data);
     return res.data;
   } catch (err) {
-    console.error(`❌ [PUT] /api/simulation-scenarios/${id} - Erreur:`, err);
+    console.error(`❌ [PUT] /simulation-scenarios/${id} - Erreur:`, err);
     throw err;
   }
 }
 
 export async function deleteScenario(id: string): Promise<void> {
-  console.log(`📡 [DELETE] /api/simulation-scenarios/${id} - Suppression du scénario`);
+  console.log(`📡 [DELETE] /simulation-scenarios/${id} - Suppression du scénario`);
   try {
-    await axiosInstance.delete(`/api/simulation-scenarios/${id}`);
-    console.log(`✅ [DELETE] /api/simulation-scenarios/${id} - Succès`);
+    await axiosInstance.delete(`/simulation-scenarios/${id}`);
+    console.log(`✅ [DELETE] /simulation-scenarios/${id} - Succès`);
   } catch (err) {
-    console.error(`❌ [DELETE] /api/simulation-scenarios/${id} - Erreur:`, err);
+    console.error(`❌ [DELETE] /simulation-scenarios/${id} - Erreur:`, err);
     throw err;
   }
 }
 
 export async function runScenario(id: string): Promise<{ simulationId: string }> {
-  console.log(`📡 [POST] /api/simulation-scenarios/${id}/run - Lancement du scénario`);
+  console.log(`📡 [POST] /simulation-scenarios/${id}/run - Lancement du scénario`);
   try {
-    const res = await axiosInstance.post(`/api/simulation-scenarios/${id}/run`);
-    console.log('✅ [POST] /api/simulation-scenarios - Succès:', res.data);
+    const res = await axiosInstance.post(`/simulation-scenarios/${id}/run`);
+    console.log('✅ [POST] /simulation-scenarios - Succès:', res.data);
     return res.data;
   } catch (err) {
-    console.error(`❌ [POST] /api/simulation-scenarios/${id}/run - Erreur:`, err);
+    console.error(`❌ [POST] /simulation-scenarios/${id}/run - Erreur:`, err);
     throw err;
   }
 }
