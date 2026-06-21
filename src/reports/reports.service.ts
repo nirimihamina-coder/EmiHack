@@ -64,7 +64,7 @@ export class ReportsService {
 
   async findAllSimple(): Promise<Report[]> {
     return this.reportRepository.find({
-      relations: { reporter: true },
+      relations: { reporter: true, route: true },
       order: { createdAt: 'DESC' },
     });
   }
