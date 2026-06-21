@@ -28,7 +28,7 @@ export class ReportsService {
 
     if (dto.routeId) data.route = { id: dto.routeId } as any;
     if (dto.reportedBy) data.reporter = { id: dto.reportedBy } as any;
-    if (dto.endTime) data.endTime = new Date(dto.endTime);
+    if (dto.endTime && dto.endTime.trim()) data.endTime = new Date(dto.endTime);
 
     const report = this.reportRepository.create(data);
     const saved = await this.reportRepository.save(report);

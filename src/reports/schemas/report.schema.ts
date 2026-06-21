@@ -48,7 +48,7 @@ export class Report {
   lanesBlocked!: number;
 
   @ApiPropertyOptional({ description: 'Utilisateur qui a signalé', type: () => User })
-  @ManyToOne(() => User, { nullable: true })
+  @ManyToOne(() => User, { nullable: true, createForeignKeyConstraints: false })
   @JoinColumn({ name: 'reported_by' })
   reporter?: User;
 
