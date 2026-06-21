@@ -12,7 +12,15 @@ export class RoutesService {
   ) {}
 
   async create(createRouteDto: CreateRouteDto): Promise<Route> {
-    const route = this.routeRepository.create(createRouteDto);
+    const geoJsonCoordinates = createRouteDto.coordinates.map(
+      ([lat, lng]) => [lng, lat]
+    );
+
+    const route = this.routeRepository.create({
+      ...createRouteDto,
+      coordinates: geoJsonCoordinates,
+    });
+    
     return this.routeRepository.save(route);
   }
 
