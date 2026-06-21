@@ -86,8 +86,22 @@ export const mapService = {
     return res.data;
   },
 
-  createReport: async (payload: any) => {
-    const res = await axiosInstance.post('/reports', payload);
+  createReport: async (data: any) => {
+    const res = await axiosInstance.post('/reports', data);
     return res.data;
-  }
+  },
+
+  // Fetch the commune boundary polygon for Fianarantsoa (admin_level=8)
+  fetchCommuneBoundary: async (): Promise<any> => {
+    const query = `[out:json][timeout:25];
+      relation["name:fr"="Fianarantsoa"]["boundary"="administrative"]["admin_level"="8"];
+      out geom;`;
+    const data = await mapService.overpassQuery(query);
+    if (data.elements?.length) return data;
+    // fallback: try name tag
+    const fallback = `[out:json][timeout:25];
+      relation["name"="Fianarantsoa"]["boundary"="administrative"]["admin_level"="8"];
+      out geom;`;
+    return mapService.overpassQuery(fallback);
+  },
 };

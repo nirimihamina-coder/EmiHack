@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { MapPin, Layers, RefreshCw, Loader2, Crosshair, Route } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth';
+
 import { mapService } from '../../services/mapService';
 
 const COLORS = [
@@ -169,7 +171,8 @@ function findClosestIntersectionToRoutes(latlng: L.LatLng, clickedRoute: any, al
 
 export default function FokontanyPage() {
   const user = useAuthStore((s) => s.user);
-  const mapElRef = useRef<HTMLDivElement>(null);
+
+  const containerRef = useRef<HTMLDivElement>(null); // reference for map container
   const mapRef = useRef<L.Map | null>(null);
   const polygonsRef = useRef<L.LayerGroup | null>(null);
   const highlightRef = useRef<L.LayerGroup | null>(null);
@@ -202,13 +205,48 @@ export default function FokontanyPage() {
   useEffect(() => { intersectionModeRef.current = intersectionMode; }, [intersectionMode]);
   const queryResultRef = useRef<{ name: string; id: number | null; lat: number; lng: number } | null>(null);
 
+  // ── Map initialization ──────────────────────────────────────────
+  useEffect(() => {
+    if (mapRef.current) return; // already initialized
+    if (!containerRef.current) return;
+
+    const map = L.map(containerRef.current, {
+      center: [-21.4545, 47.0833], // Fianarantsoa
+      zoom: 13,
+      zoomControl: true,
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    // Create layer groups
+    polygonsRef.current = L.layerGroup().addTo(map);
+    highlightRef.current = L.layerGroup().addTo(map);
+    routesRef.current = L.layerGroup().addTo(map);
+    intersectionsRef.current = L.layerGroup().addTo(map);
+
+    mapRef.current = map;
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      polygonsRef.current = null;
+      highlightRef.current = null;
+      routesRef.current = null;
+      intersectionsRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fetch Fianarantsoa boundary data
+
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
       const bbox = await mapService.fetchFianarantsoaBbox();
-
-      // Étape 1 — IDs uniquement (rapide, pas de géométrie)
       const idsQuery = `[out:json][timeout:20];
       (
         relation["boundary"="administrative"]["admin_level"="10"](${bbox});
@@ -217,63 +255,132 @@ export default function FokontanyPage() {
       const idsData = await mapService.overpassQuery(idsQuery);
       const relations = idsData.elements?.filter((e: any) => e.type === 'relation' && e.tags);
       if (!relations?.length) throw new Error('Aucune relation trouvée');
-
-      // Étape 2 — géométries par ID direct (évite le scan spatial lent)
       const idList = relations.map((r: any) => r.id).join(',');
       const geomQuery = `[out:json][timeout:20][maxsize:134217728];
-rel(id:${idList});
-out geom;`;
+      rel(id:${idList});
+      out geom;`;
       const geomData = await mapService.overpassQuery(geomQuery);
       if (!geomData.elements?.length) throw new Error('Aucune géométrie récupérée');
-
       const features = elementsToGeoJSON(geomData.elements);
       if (!features.length) throw new Error('Aucune géométrie valide');
-
       geoDataRef.current = features;
       setFokontany(features);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur inconnue');
+      console.error(err);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
   };
+  // ── Fianarantsoa city boundary (displayed in query mode) ────────
+  const fianarantsoaBoundaryRef = useRef<L.Layer | null>(null);
 
-  useEffect(() => {
-    if (mapElRef.current && !mapRef.current) {
-      const map = L.map(mapElRef.current, { zoomControl: true }).setView([-21.45249, 47.085447], 13);
-      mapRef.current = map;
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap',
-        maxZoom: 19,
-      }).addTo(map);
-      polygonsRef.current = L.layerGroup().addTo(map);
-      highlightRef.current = L.layerGroup().addTo(map);
-      routesRef.current = L.layerGroup().addTo(map);
-      intersectionsRef.current = L.layerGroup().addTo(map);
-    }
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-    };
-  }, []);
-
-  // ── Query mode cleanup ─────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !highlightRef.current) return;
+    if (!map) return;
 
     if (queryMode) {
-      highlightRef.current.clearLayers();
+      // Clear previous fokontany highlight & query result
+      if (highlightRef.current) highlightRef.current.clearLayers();
       setQueryResult(null);
       queryResultRef.current = null;
+
+      // Fetch and draw Fianarantsoa administrative boundary (try multiple levels)
+      const query = `[out:json][timeout:30];
+(
+  relation["name"="Fianarantsoa"]["boundary"="administrative"]["admin_level"="7"];
+  relation["name"="Fianarantsoa"]["boundary"="administrative"]["admin_level"="8"];
+  relation["name"="Fianarantsoa"]["boundary"="administrative"]["admin_level"="9"];
+);
+out geom;`;
+
+      mapService.overpassQuery(query).then((data: any) => {
+        if (!mapRef.current) return; // unmounted
+        const elements = data?.elements ?? [];
+
+        // Build GeoJSON features from relation geometry
+        const features: GeoJSON.Feature[] = [];
+        for (const el of elements) {
+          const outerSegs: number[][][] = (el.members ?? [])
+            .filter((m: any) => m.role === 'outer' && m.geometry?.length > 1)
+            .map((m: any) => m.geometry.map((g: any) => [g.lon, g.lat]));
+          const innerSegs: number[][][] = (el.members ?? [])
+            .filter((m: any) => m.role === 'inner' && m.geometry?.length > 1)
+            .map((m: any) => m.geometry.map((g: any) => [g.lon, g.lat]));
+          const outerRings = mergeSegmentsIntoRings(outerSegs);
+          const innerRings = mergeSegmentsIntoRings(innerSegs);
+          if (!outerRings.length) continue;
+          features.push({
+            type: 'Feature',
+            properties: { name: el.tags?.name ?? 'Fianarantsoa' },
+            geometry: {
+              type: 'MultiPolygon',
+              coordinates: outerRings.map((outer) => [outer, ...innerRings]),
+            },
+          });
+        }
+
+        if (!features.length) return;
+
+        // Remove previous layer if any
+        if (fianarantsoaBoundaryRef.current) {
+          mapRef.current.removeLayer(fianarantsoaBoundaryRef.current);
+        }
+
+        // Extract all boundary rings as [lat, lng]
+        const boundaryRings: [number, number][][] = [];
+        for (const feature of features) {
+          const geom = feature.geometry as GeoJSON.MultiPolygon;
+          if (!geom?.coordinates) continue;
+          for (const polygon of geom.coordinates) {
+            for (const ring of polygon) {
+              boundaryRings.push(ring.map(([lng, lat]: number[]) => [lat, lng] as [number, number]));
+            }
+          }
+        }
+
+        if (!boundaryRings.length) return;
+
+        // Mask polygon: world bounds as outer ring, boundary as holes
+        const outerRing: [number, number][] = [
+          [-90, -180], [90, -180], [90, 180], [-90, 180], [-90, -180],
+        ];
+        const mask = L.polygon([outerRing, ...boundaryRings], {
+          color: 'transparent',
+          fillColor: '#2563eb',
+          fillOpacity: 0.2,
+          weight: 0,
+          interactive: false,
+        });
+
+        // Boundary outline
+        const outline = L.polyline(boundaryRings[0], {
+          color: '#1d4ed8',
+          weight: 2,
+          dashArray: '6 3',
+          opacity: 0.8,
+          interactive: false,
+        });
+
+        const group = L.layerGroup([mask, outline]).addTo(mapRef.current);
+        fianarantsoaBoundaryRef.current = group;
+
+        // Fly to the boundary
+        try { mapRef.current.fitBounds(L.latLngBounds(boundaryRings[0]).pad(0.05), { animate: true, duration: 1 }); } catch { /* ignore */ }
+      }).catch(() => { /* ignore network errors */ });
+
     } else {
-      if (queryMarkerRef.current) { map.removeLayer(queryMarkerRef.current); queryMarkerRef.current = null; }
-      highlightRef.current.clearLayers();
+      // Query mode turned off — remove boundary layer and cleanup
+      if (fianarantsoaBoundaryRef.current && mapRef.current) {
+        mapRef.current.removeLayer(fianarantsoaBoundaryRef.current);
+        fianarantsoaBoundaryRef.current = null;
+      }
+      if (queryMarkerRef.current && mapRef.current) { mapRef.current.removeLayer(queryMarkerRef.current); queryMarkerRef.current = null; }
+      if (highlightRef.current) highlightRef.current.clearLayers();
       setQueryResult(null);
       queryResultRef.current = null;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queryMode]);
 
   // ── Signalement (routes) ───────────────────────────────────────
@@ -869,7 +976,8 @@ out geom;`;
               </div>
             </div>
           )}
-          <div ref={mapElRef} className="flex-1 z-10" />
+          <div ref={containerRef} className="flex-1 z-10" style={{ minHeight: '400px' }} />
+
           <div className="absolute bottom-3 left-3 z-[1000] flex items-center gap-3 px-3 py-1.5 bg-white/90 backdrop-blur rounded-lg shadow text-xs text-gray-500">
             <span className="flex items-center gap-1"><Layers size={14} />{fokontany.length} fokontany</span>
             {signalementMode && routes.length > 0 && <span className="flex items-center gap-1"><Route size={14} />{routes.length} routes</span>}
