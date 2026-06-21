@@ -106,14 +106,6 @@ const Header = ({ title = 'Tableau de bord', description = 'Bienvenue sur votre 
           <p className="text-sm text-gray-500 mt-1">{description}</p>
         </div>
 
-        {/* Bouton socket */}
-        <button
-          onClick={sendNotification}
-          className="bg-gray-600 cursor-pointer text-white transition-all hover:bg-gray-900 px-4 py-1.5 rounded-lg"
-        >
-          Socket
-        </button>
-
         {/* Barre d'actions et profil */}
         <div className="flex items-center gap-4">
           {/* ── Cloche notifications ── */}
