@@ -224,7 +224,9 @@ export default function LoginPage() {
       className="relative min-h-screen flex items-center justify-center px-4 py-10 overflow-hidden"
       style={{
         background:
-          'radial-gradient(ellipse at 15% 85%, rgba(251,191,36,0.12) 0%, transparent 55%), radial-gradient(ellipse at 85% 15%, rgba(167,139,250,0.1) 0%, transparent 50%), #fdfcf8'
+          'radial-gradient(ellipse at 15% 85%, rgba(251,191,36,0.15) 0%, transparent 55%), ' +
+          'radial-gradient(ellipse at 85% 15%, rgba(167,139,250,0.1) 0%, transparent 50%), ' +
+          '#0f172a'
       }}
     >
       {/* Gradient blobs */}
@@ -263,7 +265,7 @@ export default function LoginPage() {
             <Lock size={20} className="text-blue-600" />
           </div>
 
-          <h1 className="text-5xl font-medium text-indigo-500 mb-1 font-mogra">Bon retour</h1>
+          <h1 className="text-5xl font-extrabold text-blue-800 mb-1 font-mono">Bon retour</h1>
           <p className="text-sm text-gray-500 mb-7">
             {faceMode ? 'Scannez votre visage' : 'Connectez-vous à votre compte'}
           </p>
