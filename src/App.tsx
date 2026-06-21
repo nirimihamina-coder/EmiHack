@@ -4,7 +4,6 @@ import Index from './pages';
 import LoginPage from './pages/auth/Login';
 import Layout from './pages/layouts/Layout';
 import DashboardPage from './pages/Dashboard';
-import Messages from './pages/messages/Message';
 import Settings from './pages/settings/Settings';
 import RegisterPage from './pages/auth/Register';
 import VerifyOtpPage from './pages/auth/VerifyOtp';
@@ -18,7 +17,6 @@ import ForgotPasswordPage from './pages/auth/ForgotPassword';
 import SettingsProfile from './pages/settings/SettingsProfile';
 import SettingsPassword from './pages/settings/SettingsPassword';
 import SettingsNotifications from './pages/settings/SettingsNotifications';
-import ProductPage from './pages/Product/Product';
 import SettingsFaceScan from './pages/settings/SettingsFaceScan';
 import CartePage from './pages/carte/Carte';
 import DeviationPage from './pages/deviation/DeviationPage';
@@ -50,7 +48,6 @@ function App() {
         }
       >
         <Route index element={<DashboardPage />} />
-        <Route path="message" element={<Messages />} />
         <Route path="settings" element={<Settings />}>
           <Route index element={<SettingsIndex />} />
           <Route path="profil" element={<SettingsProfile />} />
@@ -58,7 +55,6 @@ function App() {
           <Route path="notifications" element={<SettingsNotifications />} />
           <Route path="scan-facial" element={<SettingsFaceScan />} />
         </Route>
-        <Route path="crud" element={<ProductPage />} />
         <Route path="carte" element={<CartePage />} />
         <Route path="deviation" element={<DeviationPage />} />
         <Route path="mapcollector" element={<MapCollector />} />

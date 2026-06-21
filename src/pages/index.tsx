@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
+import { FaApple, FaGooglePlay } from 'react-icons/fa';
 
 /* ─── GLOBAL STYLES ─── */
 const GLOBAL_CSS = `
@@ -187,164 +188,171 @@ const GLOBAL_CSS = `
 `;
 
 /* ─── DATA ─── */
-const NAV = ['Solutions', 'Produit', 'Équipe', 'Témoignages', 'FAQ'];
+const NAV = ['Solutions', 'Produit', 'Équipe', 'Usages', 'FAQ'];
 
 const SERVICES = [
   {
     icon: '◈',
     grad: '135deg,#7c3aed,#4338ca',
     bg: '#ede9fe',
-    title: 'Développement Web',
-    desc: 'Applications web sur-mesure, performantes et évolutives, conçues pour scaler avec votre croissance.'
+    title: 'Cartographie Vivante',
+    desc: 'Une vision claire et continue de la ville, rue par rue, carrefour par carrefour'
   },
   {
     icon: '⬡',
     grad: '135deg,#2563eb,#4338ca',
     bg: '#dbeafe',
-    title: 'Innovation IA',
-    desc: "Intégration d'intelligences artificielles personnalisées pour automatiser et amplifier vos processus métiers."
+    title: 'Alerte Instantanée',
+    desc: "Chaque imprévu sur la route est repéré avant de devenir un vrai problème."
   },
   {
     icon: '◆',
     grad: '135deg,#6d28d9,#7c3aed',
     bg: '#ede9fe',
-    title: 'Architecture Cloud',
-    desc: 'Infrastructures cloud résilientes et sécurisées, optimisées pour la performance à grande échelle.'
+    title: 'Itinéraires Intelligents',
+    desc: 'Quand une route se ferme, une autre s\'ouvre. Automatiquement.'
   },
   {
     icon: '⬟',
     grad: '135deg,#0ea5e9,#2563eb',
     bg: '#e0f2fe',
-    title: 'UX / Design Système',
-    desc: 'Expériences utilisateurs mémorables, cohérentes et accessibles, de la maquette au déploiement.'
+    title: 'Trafic en Mouvement',
+    desc: 'Suivez la circulation comme si vous surveilliez la ville depuis le ciel.'
   },
   {
     icon: '◇',
     grad: '135deg,#7c3aed,#db2777',
     bg: '#fce7f3',
-    title: 'API & Intégrations',
-    desc: 'Connexions fluides entre vos outils existants grâce à des APIs robustes et des connecteurs modulaires.'
+    title: 'Ouvert par Conception',
+    desc: 'Une architecture pensée pour accueillir demain les outils et les données de la ville.'
   },
   {
     icon: '⬠',
     grad: '135deg,#4338ca,#2563eb',
     bg: '#e0e7ff',
-    title: 'Cybersécurité Web',
-    desc: 'Audits, tests de pénétration et stratégies de sécurisation pour protéger vos assets digitaux.'
+    title: 'Conçu pour Durer',
+    desc: 'Une base solide, taillée pour grandir avec la ville plutôt que pour un seul prototype.'
   }
 ];
 
 const WHY = [
   {
     n: '01',
-    title: 'Approche produit',
-    desc: 'Nous pensons comme des fondateurs de produit, pas comme des prestataires. Chaque décision technique sert un objectif business.'
+    title: 'Voir avant de partir',
+    desc: 'Savoir ce qui vous attend sur la route change tout. Nous donnons cette longueur d\'avance aux usagers.'
   },
   {
     n: '02',
-    title: "Vélocité d'exécution",
-    desc: 'Nos sprints de 2 semaines garantissent des livraisons rapides, mesurables et itérables en continu.'
+    title: "Une ville qui respire",
+    desc: 'Le trafic n\'est pas figé. Notre approche suit son mouvement, en continu, pas par instantanés.'
   },
   {
     n: '03',
-    title: 'Stack de pointe',
-    desc: 'Next.js, Edge Computing, LLMs, WebAssembly — nous maîtrisons les technologies qui définissent le web de demain.'
+    title: 'Bâti pour grandir',
+    desc: 'Pensé dès le départ pour dépasser le prototype et accompagner une vraie ville, pas juste une démo.'
   },
   {
     n: '04',
-    title: 'Transparence totale',
-    desc: 'Accès en temps réel à notre board de projet, nos métriques et nos KPIs. Vous voyez tout, à tout moment.'
+    title: 'Rien de caché',
+    desc: 'L\'état du réseau reste visible par tous, sans information centralisée ou réservée à quelques-uns.'
   }
 ];
 
-const STATS = [
-  { val: '340+', label: 'Projets livrés' },
-  { val: '99.9%', label: 'Uptime garanti' },
-  { val: '4.9/5', label: 'Note client' },
-  { val: '18', label: 'Pays couverts' }
-];
+// const STATS = [
+//   { val: '340+', label: 'Projets livrés' },
+//   { val: '99.9%', label: 'Uptime garanti' },
+//   { val: '4.9/5', label: 'Note client' },
+//   { val: '18', label: 'Pays couverts' }
+// ];
 
 const TEAM = [
   {
-    initials: 'NK',
-    name: 'Noa Karim',
-    role: 'CEO & Co-fondateur',
+    initials: 'RN',
+    name: 'RAJOMALAHY Nancy',
+    role: 'Frontend et Présentatrice',
     grad: '135deg,#7c3aed,#4338ca',
-    desc: 'Architecte produit et visionnaire, ex-Google, 10 ans à construire des plateformes à fort trafic.'
+    desc: 'Développe l\'interface du projet et porte la présentation.'
   },
   {
-    initials: 'SM',
-    name: 'Sara Mekki',
-    role: 'CTO',
+    initials: 'RC',
+    name: 'Rakotondrabe Claudio',
+    role: 'Développeur Backend',
     grad: '135deg,#2563eb,#4338ca',
-    desc: "Ingénieure full-stack passionnée par les systèmes distribués et l'infrastructure cloud-native."
+    desc: "Développe la logique de simulation et la détection des incidents."
   },
   {
-    initials: 'YB',
-    name: 'Yann Breton',
-    role: 'Head of Design',
+    initials: 'TR',
+    name: 'Tanjona Rasamoelina',
+    role: 'Développeur Frontend',
     grad: '135deg,#6d28d9,#db2777',
-    desc: "Designer de systèmes, ex-Figma, obsédé par les interfaces qui disparaissent pour laisser place à l'usage."
+    desc: "Construit l'interface et l'animation de la simulation du réseau routier."
   },
   {
-    initials: 'AL',
-    name: 'Amira Larbi',
-    role: 'Lead AI Engineer',
+    initials: 'PA',
+    name: 'Patrick',
+    role: 'Développeur Backend',
     grad: '135deg,#0ea5e9,#4338ca',
-    desc: "Chercheuse en NLP appliqué, spécialiste de l'intégration LLM en production à grande échelle."
+    desc: "Conçoit l'API et le calcul des itinéraires alternatifs."
+  },
+  {
+    initials: 'SE',
+    name: 'Sedra',
+    role: 'Développeur Mobile',
+    grad: '135deg,#7c3aed,#1b2a4a',
+    desc: "Travaille sur l'extension mobile du projet ViaSim."
   }
 ];
 
 const TESTI = [
   {
-    init: 'RL',
-    name: 'Romain Lefèvre',
-    role: 'CTO · Fintech Pulse',
+    init: 'AU',
+    name: 'Un automobiliste',
+    role: 'Usager de tous les jours',
     col: '#ede9fe',
     tc: '#5b21b6',
     rating: 5,
-    text: "Cod' Art a livré notre plateforme en 8 semaines là où deux autres agences avaient échoué en 6 mois. Une équipe d'un niveau technique impressionnant."
+    text: "Je préfère savoir avant de partir plutôt que de le découvrir coincé dans les bouchons."
   },
   {
-    init: 'CM',
-    name: 'Céleste Martin',
-    role: 'CEO · Shoploop',
+    init: 'SV',
+    name: 'Un service municipal',
+    role: 'Gestion de la ville',
     col: '#dbeafe',
     tc: '#1e40af',
     rating: 5,
-    text: "Leur intégration IA a augmenté nos conversions de 34% en un mois. Ils comprennent vraiment l'impact business de chaque choix technologique."
+    text: "Avoir une vue d'ensemble du réseau, en continu, change la façon de prioriser nos interventions."
   },
   {
-    init: 'TV',
-    name: 'Thomas Vidal',
-    role: 'Head of Product · Eratis',
+    init: 'TR',
+    name: 'Une entreprise de transport',
+    role: 'Livraisons & logistique',
     col: '#e0e7ff',
     tc: '#3730a3',
     rating: 5,
-    text: 'Un partenaire tech comme on en rêve : proactif, rigoureux, et qui délivre. Notre MVP est passé de concept à production en 6 semaines.'
+    text: 'Un retard évité, c\'est une livraison tenue. Anticiper le trafic, c\'est tenir nos promesses.'
   }
 ];
 
 const FAQS = [
   {
-    q: 'Quels types de projets prenez-vous en charge ?',
-    a: "De la landing page au SaaS complexe avec IA embarquée, en passant par les refontres d'architectures legacy et les apps mobiles hybrides. Si c'est sur le web, on peut le construire."
+    q: 'Sur quelle ville se base le projet ?',
+    a: "Fianarantsoa nous sert de terrain d'expérimentation. L'idée est pensée pour s'étendre au-delà, une fois validée."
   },
   {
-    q: 'Comment fonctionnent vos sprints et livraisons ?',
-    a: 'Nous travaillons en cycles de 2 semaines avec des démonstrations à chaque fin de sprint. Vous accédez à un board Notion live et à un canal Slack dédié dès le jour 1.'
+    q: 'Comment un embouteillage est-il repéré ?',
+    a: '\'Soit le système le détecte de lui-même, soit il est signalé directement, avec ce qui l\'a provoqué.'
   },
   {
-    q: 'Proposez-vous une phase de discovery avant de démarrer ?',
-    a: "Oui, systématiquement. Une phase de cadrage de 1 à 2 semaines permet d'aligner vision produit, architecture technique et roadmap avant tout développement."
+    q: 'D\'où viennent les données du trafic ?',
+    a: "Le réseau s'appuie aujourd'hui sur une simulation réaliste. L'ouverture à de vraies données est une suite naturelle du projet."
   },
   {
-    q: "Qu'arrive-t-il au code après la mission ?",
-    a: 'Le code vous appartient intégralement. Nous livrons les sources complètes, la documentation technique et un guide de reprise en main pour votre équipe interne.'
+    q: "Comment un autre chemin est-il trouvé ?",
+    a: 'Dès qu\'une route est bloquée, le système explore le réseau pour proposer une alternative cohérente.'
   },
   {
-    q: "Travaillez-vous à l'international ?",
-    a: 'Absolument. Notre équipe est répartie entre Paris, Tunis, Montréal et Antananarivo. Nous gérons des projets dans 18 pays avec des équipes entièrement distribuées.'
+    q: "Et après le hackathon ?",
+    a: 'Comptes utilisateurs, données réelles, réseau élargi, et un système capable d\'anticiper plutôt que de simplement réagir.'
   }
 ];
 
@@ -413,7 +421,7 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
           <span
             style={{ fontFamily: 'Outfit', fontWeight: 800, fontSize: 20, color: logoColor, transition: 'color 0.3s' }}
           >
-            Cod' Art
+            Fianara'Track
           </span>
         </div>
 
@@ -649,9 +657,11 @@ function HexFrame() {
 
         {/* Simulated team at desks */}
         <div style={{ position: 'relative', textAlign: 'center', color: 'rgba(255,255,255,0.7)' }}>
-          <div style={{ fontSize: 56, marginBottom: 8 }}>💻</div>
+          <div style={{ fontSize: 56, marginBottom: 8 }}>
+           {/*<img src={car} className='object-cover w-xs rounded-lg h-36' alt="" />*/}
+          </div>
           <div style={{ fontFamily: 'Barlow', fontWeight: 300, fontSize: 13, letterSpacing: 2 }}>
-            INNOVATION · WEB · TECH
+            SIMULATION · TRAFIC · MOBILITÉ
           </div>
         </div>
       </div>
@@ -684,7 +694,7 @@ function HexFrame() {
       />
 
       {/* Floating badge top-left */}
-      <div
+      {/* <div
         className="float1 glass"
         style={{
           position: 'absolute',
@@ -720,10 +730,10 @@ function HexFrame() {
           <div style={{ fontSize: 11, color: '#9490b8', fontWeight: 500 }}>Projet livré</div>
           <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'Outfit', color: '#0f0a2a' }}>MVP · 6 semaines</div>
         </div>
-      </div>
+      </div> */}
 
       {/* Floating badge right */}
-      <div
+      {/* <div
         className="float2 bg-white"
         style={{
           position: 'absolute',
@@ -747,11 +757,11 @@ function HexFrame() {
         >
           99.9%
         </div>
-        {/* <div style={{ fontSize: 11, color: '#9490b8', fontWeight: 500, marginTop: 2 }}>uptime garanti</div> */}
-      </div>
+
+      </div> */}
 
       {/* Floating badge bottom-right */}
-      <div
+      {/* <div
         className="float3 glass"
         style={{
           position: 'absolute',
@@ -793,7 +803,7 @@ function HexFrame() {
           <div style={{ fontSize: 12, fontWeight: 700, fontFamily: 'Outfit', color: '#0f0a2a' }}>40+ experts</div>
           <div style={{ fontSize: 10, color: '#9490b8' }}>en ligne</div>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }
@@ -918,7 +928,7 @@ function Hero() {
               }}
             />
             <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 13, fontWeight: 500, fontFamily: 'Barlow' }}>
-              Innovation · Web · Intelligence Artificielle
+              Simulation · Mobilité · Intelligence Urbaine
             </span>
           </div>
 
@@ -931,7 +941,7 @@ function Hero() {
               letterSpacing: '-1.5px'
             }}
           >
-            Le web <br />
+            Le trafic <br />
             <span
               style={{
                 display: 'text-sm block',
@@ -940,7 +950,7 @@ function Hero() {
                 WebkitTextFillColor: 'transparent'
               }}
             >
-              de demain, <br /> c'est aujourd'hui.
+              n'aura plus, <br /> le dernier mot.
             </span>
           </h1>
 
@@ -954,13 +964,13 @@ function Hero() {
               fontWeight: 300
             }}
           >
-            Cod' Art conçoit des produits web d'exception — applications, plateformes IA, systèmes cloud — qui
-            transforment vos ambitions en avantages compétitifs mesurables.
+            Fianara'Track simule le réseau routier de Fianarantsoa en temps réel, détecte les embouteillages
+            dès qu'ils surviennent, et propose un autre chemin avant que vous ne soyez bloqué.
           </p>
 
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
             <button className="btn-primary" style={{ padding: '15px 32px', borderRadius: 14, fontSize: 16 }}>
-              Démarrer un projet →
+              Voir la demo →
             </button>
             <button
               style={{
@@ -978,12 +988,13 @@ function Hero() {
               // onMouseEnter={(e) => (e.target.style.background = 'rgba(255,255,255,0.08)')}
               // onMouseLeave={(e) => (e.target.style.background = 'transparent')}
             >
-              Voir nos travaux
+              Comment ça marche
             </button>
           </div>
 
           {/* Inline stats */}
-          <div
+
+          {/* <div
             style={{
               display: 'flex',
               gap: 40,
@@ -1002,7 +1013,7 @@ function Hero() {
                 <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13, marginTop: 2 }}>{s.l}</div>
               </div>
             ))}
-          </div>
+          </div> */}
         </div>
 
         {/* RIGHT — hex image */}
@@ -1030,7 +1041,7 @@ function Hero() {
 function Services() {
   const [hov, setHov] = useState<number | null>(null);
   return (
-    <section id="solutions" style={{ background: '#f9f8ff', padding: '100px 32px' }}>
+    <section id="produit" style={{ background: '#f9f8ff', padding: '100px 32px' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: 64 }}>
           <span
@@ -1043,7 +1054,7 @@ function Services() {
               fontFamily: 'Outfit'
             }}
           >
-            Nos Solutions
+            Notre Système
           </span>
           <h2
             style={{
@@ -1054,10 +1065,10 @@ function Services() {
               color: '#0f0a2a'
             }}
           >
-            Des solutions web qui font la différence
+            Une autre façon de voir la route
           </h2>
           <p style={{ color: '#9490b8', fontSize: 17, lineHeight: 1.7, maxWidth: 560, margin: '0 auto' }}>
-            De l'idée au déploiement, nous couvrons l'intégralité du spectre du développement web moderne.
+            De la simulation à l'alerte, FianaraTrack couvre chaque étape du trajet — avant qu'il ne tourne mal.
           </p>
         </div>
 
@@ -1185,9 +1196,9 @@ function WhyUs() {
               }}
             >
               {[
-                { icon: '🏆', text: 'Partenaire tech de confiance' },
-                { icon: '⚡', text: 'Livraison rapide & itérative' },
-                { icon: '🔐', text: 'Sécurité by design' }
+                { icon: '🗺️', text: 'Une vue claire sur tout le réseau' },
+                { icon: '⚡', text: 'Détection instantanée des incidents' },
+                { icon: '🧭', text: 'Un chemin alternatif, toujours prêt' }
               ].map((item) => (
                 <div
                   key={item.text}
@@ -1249,7 +1260,7 @@ function WhyUs() {
                 fontFamily: 'Outfit'
               }}
             >
-              Pourquoi Cod' Art
+              Pourquoi Fianara'Track
             </span>
             <h2
               style={{
@@ -1261,11 +1272,11 @@ function WhyUs() {
                 lineHeight: 1.15
               }}
             >
-              L'expertise technique au service de votre croissance
+               La technologie au service d'une route plus fluide
             </h2>
             <p style={{ color: '#9490b8', fontSize: 16, lineHeight: 1.75, marginBottom: 40 }}>
-              Nous ne sommes pas une agence de plus. Nous sommes un partenaire tech long-terme, aligné sur vos KPIs,
-              obsédé par la qualité d'exécution.
+              Fianara'Track n'est pas un simple prototype technique. C'est une autre manière d'envisager la ville :
+              anticiper les embouteillages plutôt que les subir.
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -1308,92 +1319,92 @@ function WhyUs() {
   );
 }
 
-function Stats() {
-  return (
-    <section
-      style={{
-        position: 'relative',
-        padding: '90px 32px',
-        overflow: 'hidden',
-        background: 'linear-gradient(140deg,#2e1065,#1e1b4b,#1e3a8a)'
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          opacity: 0.07,
-          backgroundImage: 'radial-gradient(circle,#fff 1px,transparent 1px)',
-          backgroundSize: '40px 40px'
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute',
-          top: -80,
-          right: -80,
-          width: 400,
-          height: 400,
-          borderRadius: '50%',
-          background: 'radial-gradient(ellipse,rgba(139,92,246,0.3),transparent 70%)'
-        }}
-      />
-      {/* hex deco */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 40,
-          left: 60,
-          width: 40,
-          height: 44,
-          opacity: 0.2,
-          background: 'rgba(167,139,250,0.8)',
-          clipPath: 'polygon(50% 0%,95% 25%,95% 75%,50% 100%,5% 75%,5% 25%)'
-        }}
-      />
+// function Stats() {
+//   return (
+//     <section
+//       style={{
+//         position: 'relative',
+//         padding: '90px 32px',
+//         overflow: 'hidden',
+//         background: 'linear-gradient(140deg,#2e1065,#1e1b4b,#1e3a8a)'
+//       }}
+//     >
+//       <div
+//         style={{
+//           position: 'absolute',
+//           inset: 0,
+//           opacity: 0.07,
+//           backgroundImage: 'radial-gradient(circle,#fff 1px,transparent 1px)',
+//           backgroundSize: '40px 40px'
+//         }}
+//       />
+//       <div
+//         style={{
+//           position: 'absolute',
+//           top: -80,
+//           right: -80,
+//           width: 400,
+//           height: 400,
+//           borderRadius: '50%',
+//           background: 'radial-gradient(ellipse,rgba(139,92,246,0.3),transparent 70%)'
+//         }}
+//       />
 
-      <div style={{ position: 'relative', maxWidth: 1200, margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: 60 }}>
-          <h2 style={{ fontSize: 'clamp(26px,3.5vw,42px)', fontWeight: 900, color: '#fff' }}>
-            Des résultats concrets, mesurables
-          </h2>
-          <p style={{ color: 'rgba(255,255,255,0.45)', marginTop: 12, fontSize: 16 }}>
-            Chaque chiffre est le reflet d'une mission accomplie.
-          </p>
-        </div>
-        <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 20 }}>
-          {STATS.map((s, i) => (
-            <div
-              key={i}
-              style={{
-                textAlign: 'center',
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 24,
-                padding: '40px 20px',
-                backdropFilter: 'blur(8px)',
-                transition: 'background 0.3s, transform 0.3s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-                e.currentTarget.style.transform = 'scale(1.04)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-            >
-              <div style={{ fontFamily: 'Outfit', fontWeight: 900, fontSize: 52, color: '#fff', lineHeight: 1 }}>
-                {s.val}
-              </div>
-              <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 14, marginTop: 10 }}>{s.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
+//       <div
+//         style={{
+//           position: 'absolute',
+//           bottom: 40,
+//           left: 60,
+//           width: 40,
+//           height: 44,
+//           opacity: 0.2,
+//           background: 'rgba(167,139,250,0.8)',
+//           clipPath: 'polygon(50% 0%,95% 25%,95% 75%,50% 100%,5% 75%,5% 25%)'
+//         }}
+//       />
+
+//       <div style={{ position: 'relative', maxWidth: 1200, margin: '0 auto' }}>
+//         <div style={{ textAlign: 'center', marginBottom: 60 }}>
+//           <h2 style={{ fontSize: 'clamp(26px,3.5vw,42px)', fontWeight: 900, color: '#fff' }}>
+//             Des résultats concrets, mesurables
+//           </h2>
+//           <p style={{ color: 'rgba(255,255,255,0.45)', marginTop: 12, fontSize: 16 }}>
+//             Chaque chiffre est le reflet d'une mission accomplie.
+//           </p>
+//         </div>
+//         <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 20 }}>
+//           {STATS.map((s, i) => (
+//             <div
+//               key={i}
+//               style={{
+//                 textAlign: 'center',
+//                 background: 'rgba(255,255,255,0.06)',
+//                 border: '1px solid rgba(255,255,255,0.1)',
+//                 borderRadius: 24,
+//                 padding: '40px 20px',
+//                 backdropFilter: 'blur(8px)',
+//                 transition: 'background 0.3s, transform 0.3s'
+//               }}
+//               onMouseEnter={(e) => {
+//                 e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+//                 e.currentTarget.style.transform = 'scale(1.04)';
+//               }}
+//               onMouseLeave={(e) => {
+//                 e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+//                 e.currentTarget.style.transform = 'scale(1)';
+//               }}
+//             >
+//               <div style={{ fontFamily: 'Outfit', fontWeight: 900, fontSize: 52, color: '#fff', lineHeight: 1 }}>
+//                 {s.val}
+//               </div>
+//               <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 14, marginTop: 10 }}>{s.label}</div>
+//             </div>
+//           ))}
+//         </div>
+//       </div>
+//     </section>
+//   );
+// }
 
 function Team() {
   return (
@@ -1421,11 +1432,11 @@ function Team() {
               color: '#0f0a2a'
             }}
           >
-            Des esprits brillants, un seul objectif
+            Des développeurs, un seul objectif
           </h2>
           <p style={{ color: '#9490b8', fontSize: 17, maxWidth: 520, margin: '0 auto', lineHeight: 1.7 }}>
-            Notre équipe pluridisciplinaire réunit ingénieurs, designers et stratèges autour d'une même passion : créer
-            des produits qui comptent.
+            Notre équipe réunit des développeurs backend, frontend et mobile, unis autour d'un même objectif :
+            rendre la route plus lisible pour tous.
           </p>
         </div>
 
@@ -1522,7 +1533,7 @@ function Team() {
 
 function Testimonials() {
   return (
-    <section id="témoignages" style={{ background: '#fff', padding: '100px 32px' }}>
+    <section id="usages" style={{ background: '#fff', padding: '100px 32px' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <div style={{ textAlign: 'center', marginBottom: 64 }}>
           <span
@@ -1535,10 +1546,10 @@ function Testimonials() {
               fontFamily: 'Outfit'
             }}
           >
-            Témoignages
+            Cas d'usage
           </span>
           <h2 style={{ fontSize: 'clamp(28px,4vw,46px)', fontWeight: 900, marginTop: 14, color: '#0f0a2a' }}>
-            Ce que disent nos clients
+            À qui profite Fianara'Track ?
           </h2>
         </div>
 
@@ -1811,7 +1822,7 @@ function CTA() {
                 fontWeight: 500
               }}
             >
-              Démo gratuite — sans engagement
+              Application mobile
             </div>
 
             <h2
@@ -1823,7 +1834,7 @@ function CTA() {
                 lineHeight: 1.1
               }}
             >
-              Prêt à construire
+              Prêt à éviter
               <br />
               <span
                 style={{
@@ -1832,7 +1843,7 @@ function CTA() {
                   WebkitTextFillColor: 'transparent'
                 }}
               >
-                quelque chose d'exceptionnel ?
+                les prochains embouteillages ?
               </span>
             </h2>
             <p
@@ -1845,12 +1856,21 @@ function CTA() {
                 lineHeight: 1.7
               }}
             >
-              Rejoignez 340+ équipes qui font confiance à Cod' Art pour concrétiser leurs projets web les plus
-              ambitieux.
+              Téléchargez Fianara'Track et gardez toujours une longueur d'avance sur le trafic de Fianarantsoa.
             </p>
             <div style={{ display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button className="btn-primary" style={{ padding: '16px 40px', borderRadius: 16, fontSize: 17 }}>
-                Démarrer maintenant →
+              <button className="btn-primary" 
+              style={{ 
+                padding: '16px 40px', 
+                borderRadius: 16, 
+                fontSize: 17, 
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                justifyContent: 'center'
+                }}>
+                <FaApple size={22} />
+                Télécharger sur l'App Store
               </button>
               <button
                 style={{
@@ -1863,12 +1883,17 @@ function CTA() {
                   color: '#fff',
                   cursor: 'pointer',
                   fontFamily: 'Outfit',
-                  transition: 'background 0.2s'
+                  transition: 'background 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  justifyContent: 'center'
                 }}
                 // onMouseEnter={(e) => (e.target.style.background = 'rgba(255,255,255,0.1)')}
                 // onMouseLeave={(e) => (e.target.style.background = 'transparent')}
               >
-                Nous contacter
+                <FaGooglePlay size={20} />
+                Disponible sur Google Play
               </button>
             </div>
             <div
@@ -1881,7 +1906,7 @@ function CTA() {
                 fontSize: 13
               }}
             >
-              {['✓ Sans carte bancaire', '✓ Réponse en 24h', '✓ Expert dédié'].map((t) => (
+              {['✓ Gratuit', '✓ Réponse en 24h', '✓ Fonctionne'].map((t) => (
                 <span key={t}>{t}</span>
               ))}
             </div>
@@ -1917,7 +1942,7 @@ function Footer() {
               >
                 <span style={{ color: '#fff', fontFamily: 'Outfit', fontWeight: 900, fontSize: 16 }}>N</span>
               </div>
-              <span style={{ fontFamily: 'Outfit', fontWeight: 800, fontSize: 20 }}>Cod' Art</span>
+              <span style={{ fontFamily: 'Outfit', fontWeight: 800, fontSize: 20 }}>Fianara' Track</span>
             </div>
             <p
               style={{
@@ -1928,8 +1953,8 @@ function Footer() {
                 maxWidth: 280
               }}
             >
-              Innovation web & intelligence artificielle. Nous construisons les produits digitaux de demain pour les
-              entreprises d'aujourd'hui.
+              Une simulation intelligente du trafic urbain à Fianarantsoa, pensée pour anticiper les embouteillages
+              avant qu'ils ne bloquent la route.
             </p>
             {/* Newsletter */}
             <div style={{ display: 'flex', gap: 8 }}>
@@ -1955,13 +1980,13 @@ function Footer() {
 
           {[
             {
-              title: 'Solutions',
-              links: ['Développement Web', 'Innovation IA', 'Architecture Cloud', 'UX & Design', 'API & Intégrations']
+              title: 'Produit',
+              links: ['Cartographie Vivante', 'Alerte Instantanée', 'Itinéraires Intelligents', 'Trafic en Mouvement', 'API & Intégrations']
             },
-            { title: 'Entreprise', links: ['À propos', 'Équipe', 'Carrières', 'Blog tech', 'Partenaires'] },
+            { title: 'Projet', links: ['À propos', 'Équipe', 'Usages', 'FAQ', 'Code source'] },
             {
               title: 'Contact',
-              links: ["hello@Cod' Art.io", '+33 1 80 XX XX XX', 'Paris · Tunis', 'Antananarivo', 'Montréal']
+              links: ['hello@fianaratrack.app', 'Fianarantsoa, Madagascar', 'Hackathon 2026', 'Université de Fianarantsoa']
             }
           ].map((col) => (
             <div key={col.title}>
@@ -2012,7 +2037,7 @@ function Footer() {
             gap: 16
           }}
         >
-          <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 13 }}>© 2025 Cod' Art. Tous droits réservés.</span>
+          <span style={{ color: 'rgba(255,255,255,0.25)', fontSize: 13 }}>© 2026 Fianara' Track. Projet réalisé en hackathon</span>
           <div style={{ display: 'flex', gap: 24 }}>
             {['Twitter', 'LinkedIn', 'GitHub', 'Dribbble'].map((s) => (
               <a
@@ -2053,7 +2078,7 @@ export default function Index() {
       <Hero />
       <Services />
       <WhyUs />
-      <Stats />
+      {/* <Stats /> */}
       <Team />
       <Testimonials />
       <FAQ />

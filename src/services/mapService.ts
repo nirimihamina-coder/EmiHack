@@ -6,18 +6,11 @@ const FETCH_TIMEOUT = 25000;
 export const mapService = {
   getOverpassServers: () => {
     const urls = import.meta.env.VITE_OVERPASS_API_URLS;
-    if (!urls) {
-      return [
-        'https://overpass-api.de/api/interpreter',
-        'https://overpass.kumi.systems/api/interpreter',
-        'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-      ];
-    }
     return urls.split(',').map((u: string) => u.trim());
   },
 
   getNominatimUrl: () => {
-    return import.meta.env.VITE_NOMINATIM_API_URL || 'https://nominatim.openstreetmap.org/search';
+    return import.meta.env.VITE_NOMINATIM_API_URL;
   },
 
   overpassQuery: async (query: string): Promise<any> => {

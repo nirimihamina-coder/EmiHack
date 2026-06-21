@@ -6,16 +6,13 @@ import { useModal } from '../../context/ModalContext';
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', end: true },
-  { to: '/dashboard/settings', icon: Settings, label: 'Paramètres' },
-  { to: '/dashboard/message', icon: MailIcon, label: 'Messages' },
-  { to: '/dashboard/crud', icon: PresentationIcon, label: 'C.R.U.D' },
-  { to: '/dashboard/carte', icon: MapIcon, label: 'Cartes' },
+  { to: '/dashboard/fokontany', icon: Globe, label: 'Signal/Fokontany' },
   { to: '/dashboard/deviation', icon: Route, label: 'Déviation' },
-  { to: '/dashboard/fokontany', icon: Globe, label: 'Fokontany' },
+  { to: '/dashboard/carte', icon: MapIcon, label: 'Cartes' },
   { to: '/dashboard/simulation', icon: SigmaSquareIcon, label: 'Simulation' },
-  { to: '/dashboard/car', icon: Cpu, label: 'Voiture IA' },
   { to: '/dashboard/car-knn', icon: Cpu, label: 'Voiture kNN' },
-  { to: '/dashboard/car-real', icon: Cpu, label: 'Routes Réelles' }
+  { to: '/dashboard/car-real', icon: Cpu, label: 'Routes Réelles' },
+  { to: '/dashboard/settings', icon: Settings, label: 'Paramètres' }
 ];
 
 // Images de fond pour le slideshow - Tes liens exacts
