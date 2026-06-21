@@ -1449,7 +1449,7 @@ export default function KnnRealRoad() {
     const headX = carW * 0.35, headY = carL * 0.15;
     ctx.fillStyle = '#fef08a';
     ctx.fillRect(headX, -headY, carW * 0.12, carW * 0.12);
-    ctx.fillRect(headX     headY - carW * 0.12, carW * 0.12, carW * 0.12);
+    ctx.fillRect(headX , headY - carW * 0.12, carW * 0.12, carW * 0.12);
     ctx.restore();
     
     ctx.restore();
