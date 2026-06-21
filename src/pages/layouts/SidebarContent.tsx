@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, Settings, LogOut, MailIcon, PresentationIcon, MapIcon, Route, Globe, SigmaSquareIcon } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useModal } from '../../context/ModalContext';
 
@@ -15,6 +15,14 @@ const navItems = [
   { to: '/dashboard/simulation', icon: SigmaSquareIcon, label: 'Simulation' }
 ];
 
+// Images de fond pour le slideshow - Tes liens exacts
+const backgroundImages = [
+  // 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTkf7v_jeLyTrTZCkZ7lUiKn21AwEpmiL9II3pcXoQa5g&s=10',
+  'https://fr.digi.com/getattachment/Blog/post/Smart-Traffic-Management-Ready-to-Deploy-Infrastru/GettyImages-635752744-1280x720.jpg?lang=en-US',
+  'https://www.vinci-autoroutes.com/static/aed7145beb37cede901969b639b30ae1/9e8c6/info-trafic-hero.jpg',
+  'https://media.sudouest.fr/8655520/1200x-1/so-57ebd67166a4bd6f7784654b-ph0.jpg',
+];
+
 interface SidebarContentProps {
   collapsed?: boolean;
   onNavClick?: () => void;
@@ -22,37 +30,69 @@ interface SidebarContentProps {
 
 const SidebarContent = ({ collapsed = false, onNavClick }: SidebarContentProps) => {
   const { openModal } = useModal();
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  // Changement automatique d'image toutes les 6 secondes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentImageIndex((prevIndex) => (prevIndex + 1) % backgroundImages.length);
+    }, 6000); // Change toutes les 6 secondes
+
+    return () => clearInterval(interval);
+  }, []);
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-gray-100 transition-all duration-300">
-        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
-          <LayoutDashboard size={16} className="text-white" />
+    <div className="flex flex-col h-full relative overflow-hidden">
+      {/* Slideshow de fond avec transition fluide */}
+      {backgroundImages.map((imageUrl, index) => (
+        <div
+          key={imageUrl}
+          className="absolute inset-0 rounded-lg transition-opacity duration-1000 ease-in-out"
+          style={{
+            backgroundImage: `url('${imageUrl}')`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'left',
+            backgroundRepeat: 'no-repeat',
+            opacity: index === currentImageIndex ? 1 : 0,
+            zIndex: index === currentImageIndex ? 1 : 0
+          }}
+        />
+      ))}
+      
+      {/* Overlay blanc semi-transparent pour la lisibilité */}
+      <div className="absolute inset-0 bg-white/85 backdrop-blur-[1px]" style={{ zIndex: 2 }} />
+      
+      {/* Contenu */}
+      <div className="relative z-10 flex flex-col h-full">
+        {/* Logo */}
+        <div className="flex items-center gap-3 px-4 py-5 border-b border-gray-200/60 transition-all duration-300">
+          <div className="w-8 h-8 bg-linear-to-br from-indigo-500 to-indigo-600 rounded-lg flex items-center justify-center shrink-0 shadow-sm">
+            <LayoutDashboard size={16} className="text-white" />
+          </div>
+          {!collapsed && (
+            <span className="font-semibold text-gray-900 text- font-poppins whitespace-nowrap transition-opacity duration-200">
+              Traffic-Lab
+            </span>
+          )}
         </div>
-        {!collapsed && (
-          <span className="font-semibold text-gray-900 text-sm whitespace-nowrap transition-opacity duration-200">
-            Mon App
-          </span>
-        )}
-      </div>
 
-      {/* Nav */}
-      <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto overflow-x-hidden">
-        {navItems.map(({ to, icon: Icon, label, end }) => (
-          <NavItem key={to} to={to} icon={Icon} label={label} end={end} collapsed={collapsed} onNavClick={onNavClick} />
-        ))}
-      </nav>
+        {/* Nav */}
+        <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto overflow-x-hidden">
+          {navItems.map(({ to, icon: Icon, label, end }) => (
+            <NavItem key={to} to={to} icon={Icon} label={label} end={end} collapsed={collapsed} onNavClick={onNavClick} />
+          ))}
+        </nav>
 
-      {/* Logout */}
-      <div className="px-2 py-3 border-t border-gray-100">
-        <button
-          onClick={() => openModal('logout')}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-all duration-300"
-        >
-          <LogOut size={18} className="flex-shrink-0" />
-          {!collapsed && <span className="line-clamp-1">Se déconnecter</span>}
-        </button>
+        {/* Logout */}
+        <div className="px-2 py-3 border-t border-gray-200/60">
+          <button
+            onClick={() => openModal('logout')}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium bg-red-50 hover:text-red-600 text-red-900 cursor-pointer transition-all duration-300 relative z-10"
+          >
+            <LogOut size={18} className="flex-shrink-0" />
+            {!collapsed && <span className="line-clamp-1">Se déconnecter</span>}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -90,8 +130,8 @@ function NavItem({ to, icon: Icon, label, end, collapsed, onNavClick }: NavItemP
           end={end}
           onClick={onNavClick}
           className={({ isActive }) =>
-            `group flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-300 ${
-              isActive ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            `group flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-all duration-300 relative z-10 ${
+              isActive ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600 hover:bg-black/10 hover:text-gray-900'
             }`
           }
         >

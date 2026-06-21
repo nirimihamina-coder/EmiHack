@@ -52,26 +52,26 @@ const Layout = () => {
 
   // Obtenir la configuration de la route actuelle
   const currentRoute = routeConfig[location.pathname] || {
-    title: 'Mon App',
+    title: "Traffic-Lab",
     description: 'Bienvenue sur votre espace de travail'
   };
 
   return (
     <ModalProvider>
-      {/* ton layout existant */}
       <div className="flex h-screen bg-gray-50 overflow-hidden">
         {/* Sidebar desktop */}
         <aside
-          className={`hidden md:flex flex-col m-3 bg-white border border-gray-200 rounded-lg transition-all duration-300 relative ${
+          className={`hidden md:flex flex-col m-3 bg-white border border-gray-200 rounded-lg transition-all duration-300 relative overflow-visible ${
             collapsed ? 'w-16' : 'w-60'
           }`}
         >
           <SidebarContent collapsed={collapsed} />
 
-          {/* Collapse toggle */}
+          {/* Collapse toggle - CORRIGÉ */}
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="absolute top-15 -right-3 hidden cursor-pointer md:flex items-center justify-center w-6 h-6 bg-gray-800  rounded-full text-white transition-colors shadow-sm"
+            className="absolute z-[99999] top-[60px] -right-3 hidden md:flex items-center justify-center w-6 h-6 bg-gray-800 rounded-full text-white hover:bg-gray-700 transition-all shadow-lg cursor-pointer"
+            aria-label={collapsed ? 'Ouvrir le menu' : 'Fermer le menu'}
           >
             <ChevronLeft size={14} className={`transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`} />
           </button>
