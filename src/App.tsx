@@ -25,6 +25,9 @@ import DeviationPage from './pages/deviation/DeviationPage';
 import MapCollector from './pages/deviation/MapCollector';
 import FokontanyPage from './pages/fokontany/FokontanyPage';
 import Simulation from './pages/simulation/Simulation';
+import CarIntelligent from './pages/car/CarIntelligent';
+import KnnCarSimulator from './pages/car/KnnCarSimulator';
+import KnnRealRoad from './pages/car/KnnRealRoad';
 
 function App() {
   return (
@@ -61,6 +64,9 @@ function App() {
         <Route path="mapcollector" element={<MapCollector />} />
         <Route path="fokontany" element={<FokontanyPage />} />
         <Route path="simulation" element={<Simulation />} />
+        <Route path="car" element={<CarIntelligent />} />
+        <Route path="car-knn" element={<KnnCarSimulator />} />
+        <Route path="car-real" element={<KnnRealRoad />} />
       </Route>
     </Routes>
   );

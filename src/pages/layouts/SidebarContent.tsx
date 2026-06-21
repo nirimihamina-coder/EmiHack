@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Settings, LogOut, MailIcon, PresentationIcon, MapIcon, Route, Globe, SigmaSquareIcon } from 'lucide-react';
+import { LayoutDashboard, Settings, LogOut, MailIcon, PresentationIcon, MapIcon, Route, Globe, SigmaSquareIcon, Cpu } from 'lucide-react';
 import { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useModal } from '../../context/ModalContext';
@@ -12,7 +12,10 @@ const navItems = [
   { to: '/dashboard/carte', icon: MapIcon, label: 'Cartes' },
   { to: '/dashboard/deviation', icon: Route, label: 'Déviation' },
   { to: '/dashboard/fokontany', icon: Globe, label: 'Fokontany' },
-  { to: '/dashboard/simulation', icon: SigmaSquareIcon, label: 'Simulation' }
+  { to: '/dashboard/simulation', icon: SigmaSquareIcon, label: 'Simulation' },
+  { to: '/dashboard/car', icon: Cpu, label: 'Voiture IA' },
+  { to: '/dashboard/car-knn', icon: Cpu, label: 'Voiture kNN' },
+  { to: '/dashboard/car-real', icon: Cpu, label: 'Routes Réelles' }
 ];
 
 // Images de fond pour le slideshow - Tes liens exacts
