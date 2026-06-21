@@ -8,63 +8,41 @@ interface MergedNetwork {
   allPoints: Vec2[]; segments: Vec2[][]; intersections: Vec2[]; chains: Vec2[][];
   nodeAdj: Map<string, Set<string>>; nodePos: Map<string, Vec2>;
 }
-interface CarState { id: number; x: number; y: number; angle: number; vitesse: number; alive: boolean; score: number; sensors: number[]; stuckFrames: number; lastX: number; lastY: number; coverage: number; }
+interface CarState {
+  id: number; x: number; y: number; angle: number; vitesse: number;
+  alive: boolean; score: number; sensors: number[]; stuckFrames: number;
+  lastX: number; lastY: number; coverage: number;
+}
 interface KnnResult { targetX: number; targetY: number; speedFactor: number; neighbors: Vec2[]; }
 interface RoadCodeStatus { conforme: boolean; vitesseMax: number; raison: string; }
 
-// ── Types pour le modèle KNN ─────────────────────────────────────────────────
 interface TrainingSample {
-  sensors: number[];
-  kValue: number;
-  speedFactor: number;
-  angleDiff: number;
-  score: number;
-  alive: boolean;
-  context: 'straight' | 'intersection' | 'turn' | 'stuck';
+  sensors: number[]; kValue: number; speedFactor: number; angleDiff: number;
+  score: number; alive: boolean;
+  context: 'straight' | 'intersection' | 'turn' | 'stuck' | 'danger';
 }
 
 interface KNNModel {
-  id: string;
-  name: string;
-  timestamp: string;
+  id: string; name: string; timestamp: string;
   samples: TrainingSample[];
   metadata: {
-    totalSamples: number;
-    avgScore: number;
-    bestScore: number;
-    routesCount: number;
-    intersectionsCount: number;
-    trainingDuration: number;
+    totalSamples: number; avgScore: number; bestScore: number;
+    routesCount: number; intersectionsCount: number; trainingDuration: number;
   };
 }
 
-interface InferenceResult {
-  speedFactor: number;
-  angleDiff: number;
-  confidence: number;
-}
+interface InferenceResult { speedFactor: number; angleDiff: number; confidence: number; }
 
 interface SavedModel {
-  id: string;
-  name: string;
-  timestamp: string;
-  score: number;
-  distance: number;
-  coverage: number;
-  totalIntersections: number;
-  kValue: number;
-  carData: {
-    x: number;
-    y: number;
-    angle: number;
-    vitesse: number;
-  };
+  id: string; name: string; timestamp: string;
+  score: number; distance: number; coverage: number;
+  totalIntersections: number; kValue: number;
+  carData: { x: number; y: number; angle: number; vitesse: number; };
 }
 
-const MOCK_ROUTES: ApiRoute[] = [
-  { id: 'mock-1', name: 'Route Nord-Sud', coordinates: [[47.080,-21.440],[47.082,-21.445],[47.084,-21.450],[47.085,-21.455],[47.085,-21.460],[47.086,-21.465],[47.087,-21.470],[47.088,-21.475]] },
-  { id: 'mock-2', name: 'Route Est-Ouest', coordinates: [[47.070,-21.452],[47.073,-21.453],[47.076,-21.454],[47.079,-21.454],[47.082,-21.454],[47.085,-21.455],[47.088,-21.456],[47.091,-21.457],[47.094,-21.458]] },
-];
+// ═══════════════════════════════════════════════════════════════════════════════
+// ══ CONSTANTES ════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 
 const ROAD_WIDTH_METERS = 10;
 const ROAD_VISUAL_FACTOR = 1.8;
@@ -74,45 +52,50 @@ const NUM_SENSORS = 7;
 const SENSOR_ANGLES = [-0.9, -0.5, -0.22, 0, 0.22, 0.5, 0.9];
 const MAX_SPEED = 5;
 const MIN_SPEED = 1.5;
-const ACCEL_FACTOR = 0.045;
-const STEER_FACTOR = 0.085;
+const ACCEL_FACTOR = 0.08;
+const STEER_FACTOR = 0.18;
 const INTERSECTION_TOLERANCE = 0.00035;
 const OSM_ZOOM = 17;
 const LOOK_AHEAD_MIN = 35;
-const ANTI_STUCK_FRAMES = 20;
+const ANTI_STUCK_FRAMES = 25;
 const SPEED_LIMIT_KMH = 50;
 const INTERSECTION_SLOWDOWN_RADIUS = 55;
 const INTERSECTION_STOP_RADIUS = 22;
 const SAFE_DISTANCE_FACTOR = 0.35;
-const SENSOR_LENGTH_METERS = 15;
+const SENSOR_LENGTH_METERS = 28;
 const RESPAWN_DELAY = 1500;
 const MODEL_STORAGE_KEY = 'knn_road_models';
 const KNN_MODEL_STORAGE_KEY = 'knn_brain_models';
 const MIN_SAMPLES_FOR_INFERENCE = 20;
 
-// ── Classe KNNBrain ───────────────────────────────────────────────────────────
+const WALL_THRESHOLD = 0.30;
+const OPEN_THRESHOLD = 0.55;
+const CURVE_THRESHOLD = 0.40;
+const EMERGENCY_STOP = 0.12;
+
+const MOCK_ROUTES: ApiRoute[] = [
+  { id: 'mock-1', name: 'Route Nord-Sud', coordinates: [[47.080,-21.440],[47.082,-21.445],[47.084,-21.450],[47.085,-21.455],[47.085,-21.460],[47.086,-21.465],[47.087,-21.470],[47.088,-21.475]] },
+  { id: 'mock-2', name: 'Route Est-Ouest', coordinates: [[47.070,-21.452],[47.073,-21.453],[47.076,-21.454],[47.079,-21.454],[47.082,-21.454],[47.085,-21.455],[47.088,-21.456],[47.091,-21.457],[47.094,-21.458]] },
+];
+
+//  Classe KNNBrain ──────────────────────────────────────────────────────────
 class KNNBrain {
   private samples: TrainingSample[] = [];
   private isTraining: boolean = false;
   
-  constructor(initialSamples: TrainingSample[] = []) {
-    this.samples = initialSamples;
-  }
+  constructor(initialSamples: TrainingSample[] = []) { this.samples = initialSamples; }
 
   startTraining() { this.isTraining = true; }
   stopTraining() { this.isTraining = false; }
   getIsTraining() { return this.isTraining; }
   getSampleCount() { return this.samples.length; }
   getSamples() { return this.samples; }
-
   clear() { this.samples = []; }
 
   recordSample(sample: TrainingSample) {
     if (!this.isTraining) return;
     this.samples.push(sample);
-    if (this.samples.length > 8000) {
-      this.samples = this.samples.slice(-6000);
-    }
+    if (this.samples.length > 8000) this.samples = this.samples.slice(-6000);
   }
 
   predict(sensors: number[], k: number, currentContext: TrainingSample['context']): InferenceResult {
@@ -120,33 +103,31 @@ class KNNBrain {
       return { speedFactor: 0.5, angleDiff: 0, confidence: 0 };
     }
 
+    // ═══ ÉTAPE 2 : Calcul de la distance euclidienne ═══
+    // d(x,y) = √Σ(xᵢ - y)²
     const distances = this.samples.map((s, idx) => ({
       idx,
       dist: Math.sqrt(s.sensors.reduce((sum, val, i) => sum + (val - sensors[i]) ** 2, 0)),
       context: s.context
     }));
 
+    // ═══ ÉTAPE 3 : Trouver les K plus proches voisins ═══
     const sameContext = distances.filter(d => d.context === currentContext);
     const candidates = sameContext.length >= k ? sameContext : distances;
-
     candidates.sort((a, b) => a.dist - b.dist);
     const neighbors = candidates.slice(0, Math.min(k, candidates.length));
 
-    if (neighbors.length === 0) {
-      return { speedFactor: 0.5, angleDiff: 0, confidence: 0 };
-    }
+    if (neighbors.length === 0) return { speedFactor: 0.5, angleDiff: 0, confidence: 0 };
 
-    let totalWeight = 0;
-    let weightedSpeed = 0;
-    let weightedAngle = 0;
-
+    // ═══ ÉTAPE 4 : Décision finale (régression pondérée) ═══
+    // ŷ = (1/K) Σ yᵢ pondéré par l'inverse de la distance
+    let totalWeight = 0, weightedSpeed = 0, weightedAngle = 0;
     for (const n of neighbors) {
       const sample = this.samples[n.idx];
       const weight = 1 / (n.dist + 0.001);
       const survivalBonus = sample.alive ? 2.0 : 0.5;
       const scoreBonus = Math.max(0.1, sample.score / 1000);
       const finalWeight = weight * survivalBonus * scoreBonus;
-
       weightedSpeed += sample.speedFactor * finalWeight;
       weightedAngle += sample.angleDiff * finalWeight;
       totalWeight += finalWeight;
@@ -164,11 +145,8 @@ class KNNBrain {
 
   exportModel(name: string, metadata: KNNModel['metadata']): KNNModel {
     return {
-      id: `knn_${Date.now()}`,
-      name,
-      timestamp: new Date().toISOString(),
-      samples: [...this.samples],
-      metadata
+      id: `knn_${Date.now()}`, name, timestamp: new Date().toISOString(),
+      samples: [...this.samples], metadata
     };
   }
 
@@ -177,7 +155,7 @@ class KNNBrain {
   }
 }
 
-// ── Projection ─────────────────────────────────────────────────────────────────
+// ── Projection ────────────────────────────────────────────────────────────────
 function latLngToTile(lat: number, lng: number, zoom: number) {
   const n = Math.pow(2, zoom);
   const tx = Math.floor(((lng + 180) / 360) * n);
@@ -212,17 +190,14 @@ function loadTile(tx: number, ty: number, zoom: number): HTMLImageElement | null
   return null;
 }
 
-async function fetchWithTimeout(url: string, timeoutMs = 4000): Promise<Response> {
+async function fetchWithTimeout(url: string, timeoutMs = 8000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timer);
     return res;
-  } catch (e) {
-    clearTimeout(timer);
-    throw e;
-  }
+  } catch (e) { clearTimeout(timer); throw e; }
 }
 
 function dist2D(a: Vec2, b: Vec2) { return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2); }
@@ -312,56 +287,33 @@ class SpatialGrid {
     roadSegments: { a: Vec2; b: Vec2 }[];
   }> = new Map();
 
-  constructor(
-    smoothBorders: { left: Vec2[]; right: Vec2[] }[],
-    allPoints: Vec2[],
-    roadChains: Vec2[][]
-  ) {
+  constructor(smoothBorders: { left: Vec2[]; right: Vec2[] }[], allPoints: Vec2[], roadChains: Vec2[][]) {
     const getKeysForSegment = (a: Vec2, b: Vec2) => {
       const keys = new Set<string>();
-      const minX = Math.min(a.x, b.x);
-      const maxX = Math.max(a.x, b.x);
-      const minY = Math.min(a.y, b.y);
-      const maxY = Math.max(a.y, b.y);
-      
-      const startCellX = Math.floor(minX / 300);
-      const endCellX = Math.floor(maxX / 300);
-      const startCellY = Math.floor(minY / 300);
-      const endCellY = Math.floor(maxY / 300);
-      
+      const minX = Math.min(a.x, b.x), maxX = Math.max(a.x, b.x);
+      const minY = Math.min(a.y, b.y), maxY = Math.max(a.y, b.y);
+      const startCellX = Math.floor(minX / 300), endCellX = Math.floor(maxX / 300);
+      const startCellY = Math.floor(minY / 300), endCellY = Math.floor(maxY / 300);
       for (let cx = startCellX; cx <= endCellX; cx++) {
-        for (let cy = startCellY; cy <= endCellY; cy++) {
-          keys.add(`${cx}_${cy}`);
-        }
+        for (let cy = startCellY; cy <= endCellY; cy++) keys.add(`${cx}_${cy}`);
       }
       return Array.from(keys);
     };
 
     const getCell = (key: string) => {
       let cell = this.grid.get(key);
-      if (!cell) {
-        cell = { leftSegments: [], rightSegments: [], points: [], roadSegments: [] };
-        this.grid.set(key, cell);
-      }
+      if (!cell) { cell = { leftSegments: [], rightSegments: [], points: [], roadSegments: [] }; this.grid.set(key, cell); }
       return cell;
     };
 
     for (const chain of smoothBorders) {
       for (let i = 0; i < chain.left.length - 1; i++) {
-        const a = chain.left[i];
-        const b = chain.left[i + 1];
-        const keys = getKeysForSegment(a, b);
-        for (const k of keys) {
-          getCell(k).leftSegments.push({ a, b });
-        }
+        const a = chain.left[i], b = chain.left[i + 1];
+        for (const k of getKeysForSegment(a, b)) getCell(k).leftSegments.push({ a, b });
       }
       for (let i = 0; i < chain.right.length - 1; i++) {
-        const a = chain.right[i];
-        const b = chain.right[i + 1];
-        const keys = getKeysForSegment(a, b);
-        for (const k of keys) {
-          getCell(k).rightSegments.push({ a, b });
-        }
+        const a = chain.right[i], b = chain.right[i + 1];
+        for (const k of getKeysForSegment(a, b)) getCell(k).rightSegments.push({ a, b });
       }
     }
 
@@ -372,25 +324,18 @@ class SpatialGrid {
 
     for (const chain of roadChains) {
       for (let i = 0; i < chain.length - 1; i++) {
-        const a = chain[i];
-        const b = chain[i + 1];
-        const keys = getKeysForSegment(a, b);
-        for (const k of keys) {
-          getCell(k).roadSegments.push({ a, b });
-        }
+        const a = chain[i], b = chain[i + 1];
+        for (const k of getKeysForSegment(a, b)) getCell(k).roadSegments.push({ a, b });
       }
     }
   }
 
   query(x: number, y: number) {
-    const cx = Math.floor(x / 300);
-    const cy = Math.floor(y / 300);
-    
+    const cx = Math.floor(x / 300), cy = Math.floor(y / 300);
     const leftSegments: { a: Vec2; b: Vec2 }[] = [];
     const rightSegments: { a: Vec2; b: Vec2 }[] = [];
     const points: Vec2[] = [];
     const roadSegments: { a: Vec2; b: Vec2 }[] = [];
-    
     for (let dx = -1; dx <= 1; dx++) {
       for (let dy = -1; dy <= 1; dy++) {
         const cell = this.grid.get(`${cx + dx}_${cy + dy}`);
@@ -402,7 +347,6 @@ class SpatialGrid {
         }
       }
     }
-    
     return { leftSegments, rightSegments, points, roadSegments };
   }
 }
@@ -466,9 +410,7 @@ function knnOnWaypoints(car: CarState, network: MergedNetwork, k: number, localP
   
   const maxDist = Math.max(...candidates.map((c) => c.dist), 1);
   const normalized = candidates.map((c) => ({ 
-    ...c, 
-    normDist: c.dist / maxDist,
-    normForward: (c.forwardDot + maxDist) / (2 * maxDist)
+    ...c, normDist: c.dist / maxDist, normForward: (c.forwardDot + maxDist) / (2 * maxDist)
   }));
   
   normalized.sort((a, b) => {
@@ -481,12 +423,9 @@ function knnOnWaypoints(car: CarState, network: MergedNetwork, k: number, localP
   let totalWeight = 0, targetX = 0, targetY = 0;
   for (const n of knnNeighbors) {
     const w = 1 / (n.dist + 1e-6);
-    totalWeight += w; 
-    targetX += n.point.x * w; 
-    targetY += n.point.y * w;
+    totalWeight += w; targetX += n.point.x * w; targetY += n.point.y * w;
   }
-  targetX /= totalWeight; 
-  targetY /= totalWeight;
+  targetX /= totalWeight; targetY /= totalWeight;
   
   const avgDist = knnNeighbors.reduce((a, n) => a + n.dist, 0) / knnNeighbors.length;
   const speedFactor = Math.max(0.1, Math.min(1, 1 - avgDist * 0.12));
@@ -572,73 +511,162 @@ function buildSmoothBorders(points: Vec2[], halfWidth: number) {
   return buildBorders(smooth, halfWidth);
 }
 
-// ── Gestion des modèles classiques ─────────────────────────────────────────────
+// ─ Gestion des modèles ────────────────────────────────────────────────────────
 function getSavedModels(): SavedModel[] {
-  try {
-    const raw = localStorage.getItem(MODEL_STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
+  try { const raw = localStorage.getItem(MODEL_STORAGE_KEY); if (!raw) return []; return JSON.parse(raw); }
+  catch { return []; }
 }
-
 function saveModelToStorage(model: SavedModel): void {
   const models = getSavedModels();
   const existingIndex = models.findIndex(m => m.id === model.id);
-  if (existingIndex >= 0) {
-    models[existingIndex] = model;
-  } else {
-    models.push(model);
-  }
+  if (existingIndex >= 0) models[existingIndex] = model; else models.push(model);
   localStorage.setItem(MODEL_STORAGE_KEY, JSON.stringify(models));
 }
-
 function deleteModelFromStorage(id: string): void {
-  const models = getSavedModels();
-  const filtered = models.filter(m => m.id !== id);
-  localStorage.setItem(MODEL_STORAGE_KEY, JSON.stringify(filtered));
+  const models = getSavedModels().filter(m => m.id !== id);
+  localStorage.setItem(MODEL_STORAGE_KEY, JSON.stringify(models));
 }
-
-// ── Gestion des modèles KNN ──────────────────────────────────────────────────
 function getSavedKNNModels(): KNNModel[] {
-  try {
-    const raw = localStorage.getItem(KNN_MODEL_STORAGE_KEY);
-    if (!raw) return [];
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
+  try { const raw = localStorage.getItem(KNN_MODEL_STORAGE_KEY); if (!raw) return []; return JSON.parse(raw); }
+  catch { return []; }
 }
-
 function saveKNNModelToStorage(model: KNNModel): void {
   const models = getSavedKNNModels();
   const existingIndex = models.findIndex(m => m.id === model.id);
-  if (existingIndex >= 0) {
-    models[existingIndex] = model;
-  } else {
-    models.push(model);
-  }
+  if (existingIndex >= 0) models[existingIndex] = model; else models.push(model);
+  localStorage.setItem(KNN_MODEL_STORAGE_KEY, JSON.stringify(models));
+}
+function deleteKNNModelFromStorage(id: string): void {
+  const models = getSavedKNNModels().filter(m => m.id !== id);
   localStorage.setItem(KNN_MODEL_STORAGE_KEY, JSON.stringify(models));
 }
 
-function deleteKNNModelFromStorage(id: string): void {
-  const models = getSavedKNNModels();
-  const filtered = models.filter(m => m.id !== id);
-  localStorage.setItem(KNN_MODEL_STORAGE_KEY, JSON.stringify(filtered));
+// ═══════════════════════════════════════════════════════════════════════════════
+// ═══ SYSTÈME D'ÉVITEMENT QUI FONCTIONNE VRAIMENT ═══════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface AvoidanceDecision {
+  risk: number;
+  correction: number;
+  speedFactor: number;
+  dangerLevel: 'safe' | 'warning' | 'critical';
+  situation: string;
+  overrideNavigation: boolean;
 }
 
-// ── tickCar original (mode manuel/entraînement) ──────────────────────────────
-function tickCar(car: CarState, network: MergedNetwork, grid: SpatialGrid, kValue: number, roadWidth: number, carLengthPx: number, carWidthPx: number, sensorLength: number): CarState {
+function computeAvoidanceDecision(
+  sensors: number[],
+  nearestIxDist: number
+): AvoidanceDecision {
+  const [extL, left, leftFront, center, rightFront, right, extR] = sensors;
+
+  const leftSideOpen = left > OPEN_THRESHOLD && extL > OPEN_THRESHOLD * 0.8;
+  const rightSideOpen = right > OPEN_THRESHOLD && extR > OPEN_THRESHOLD * 0.8;
+  
+  const frontBlocked = center < CURVE_THRESHOLD;
+  const leftFrontBlocked = leftFront < CURVE_THRESHOLD;
+  const rightFrontBlocked = rightFront < CURVE_THRESHOLD;
+  
+  if (center < EMERGENCY_STOP) {
+    if (leftSideOpen && !rightSideOpen) {
+      return { risk: 1.0, correction: -0.9, speedFactor: 0.05, dangerLevel: 'critical', situation: 'URGENCE: tourne gauche', overrideNavigation: true };
+    }
+    if (rightSideOpen && !leftSideOpen) {
+      return { risk: 1.0, correction: 0.9, speedFactor: 0.05, dangerLevel: 'critical', situation: 'URGENCE: tourne droite', overrideNavigation: true };
+    }
+    const leftScore = left + leftFront;
+    const rightScore = right + rightFront;
+    if (leftScore > rightScore) {
+      return { risk: 1.0, correction: -0.8, speedFactor: 0.05, dangerLevel: 'critical', situation: 'URGENCE: contourne gauche', overrideNavigation: true };
+    } else {
+      return { risk: 1.0, correction: 0.8, speedFactor: 0.05, dangerLevel: 'critical', situation: 'URGENCE: contourne droite', overrideNavigation: true };
+    }
+  }
+
+  if (leftFrontBlocked && rightSideOpen && !rightFrontBlocked) {
+    const urgency = 1 - leftFront;
+    const correction = 0.5 + urgency * 0.4;
+    return {
+      risk: 0.4 + urgency * 0.3,
+      correction,
+      speedFactor: 0.5,
+      dangerLevel: 'warning',
+      situation: 'Virage à droite',
+      overrideNavigation: true
+    };
+  }
+
+  if (rightFrontBlocked && leftSideOpen && !leftFrontBlocked) {
+    const urgency = 1 - rightFront;
+    const correction = -(0.5 + urgency * 0.4);
+    return {
+      risk: 0.4 + urgency * 0.3,
+      correction,
+      speedFactor: 0.5,
+      dangerLevel: 'warning',
+      situation: 'Virage à gauche',
+      overrideNavigation: true
+    };
+  }
+
+  if (frontBlocked) {
+    if (leftSideOpen && !rightSideOpen) {
+      return { risk: 0.8, correction: -0.8, speedFactor: 0.2, dangerLevel: 'critical', situation: 'Contourne à gauche', overrideNavigation: true };
+    }
+    if (rightSideOpen && !leftSideOpen) {
+      return { risk: 0.8, correction: 0.8, speedFactor: 0.2, dangerLevel: 'critical', situation: 'Contourne à droite', overrideNavigation: true };
+    }
+    const leftScore = left * 0.5 + leftFront * 0.5;
+    const rightScore = right * 0.5 + rightFront * 0.5;
+    if (leftScore > rightScore + 0.1) {
+      return { risk: 0.7, correction: -0.7, speedFactor: 0.25, dangerLevel: 'critical', situation: 'Contourne gauche', overrideNavigation: true };
+    } else if (rightScore > leftScore + 0.1) {
+      return { risk: 0.7, correction: 0.7, speedFactor: 0.25, dangerLevel: 'critical', situation: 'Contourne droite', overrideNavigation: true };
+    }
+    return { risk: 0.6, correction: 0.5, speedFactor: 0.3, dangerLevel: 'critical', situation: 'Obstacle: contourne', overrideNavigation: true };
+  }
+
+  if (left < WALL_THRESHOLD && rightSideOpen) {
+    return { risk: 0.4, correction: 0.5, speedFactor: 0.7, dangerLevel: 'warning', situation: 'Recentre vers droite', overrideNavigation: false };
+  }
+  if (right < WALL_THRESHOLD && leftSideOpen) {
+    return { risk: 0.4, correction: -0.5, speedFactor: 0.7, dangerLevel: 'warning', situation: 'Recentre vers gauche', overrideNavigation: false };
+  }
+
+  const imbalance = (left - right);
+  const gentleCorrection = -imbalance * 0.25;
+  
+  let speedFactor = 1.0;
+  const frontClearance = (leftFront + center + rightFront) / 3;
+  if (frontClearance < 0.5) speedFactor = 0.7;
+  else if (frontClearance < 0.7) speedFactor = 0.85;
+  
+  return {
+    risk: Math.max(0, 0.1 - frontClearance * 0.1),
+    correction: gentleCorrection,
+    speedFactor,
+    dangerLevel: 'safe',
+    situation: 'Route libre',
+    overrideNavigation: false
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ═══ tickCar AVEC ÉVITEMENT ACTIF ═══════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function tickCar(
+  car: CarState, 
+  network: MergedNetwork, 
+  grid: SpatialGrid, 
+  kValue: number, 
+  roadWidth: number, 
+  carLengthPx: number, 
+  carWidthPx: number, 
+  sensorLength: number
+): { car: CarState; collisionRisk: number; situation: string } {
   const updated = { ...car };
   const localQuery = grid.query(updated.x, updated.y);
-  
-  const knnResult = knnOnWaypoints(updated, network, kValue, localQuery.points);
-  const dx = knnResult.targetX - updated.x, dy = knnResult.targetY - updated.y;
-  const targetAngle = Math.atan2(dy, dx);
-  let angleDiff = targetAngle - updated.angle;
-  while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-  while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
   
   const sensorReadings: number[] = [];
   for (let i = 0; i < NUM_SENSORS; i++) {
@@ -647,36 +675,68 @@ function tickCar(car: CarState, network: MergedNetwork, grid: SpatialGrid, kValu
     const distRight = castRay({ x: updated.x, y: updated.y }, rayAngle, sensorLength, localQuery.rightSegments);
     sensorReadings.push(Math.min(1, Math.min(distLeft, distRight) / sensorLength));
   }
-  const midIdx = Math.floor(NUM_SENSORS / 2);
-  let speedFactor = knnResult.speedFactor;
-
-  const frontClearance = sensorReadings[midIdx];
-  if (frontClearance < 0.18) speedFactor = 0;
-  else if (frontClearance < SAFE_DISTANCE_FACTOR) speedFactor = Math.min(speedFactor, frontClearance / SAFE_DISTANCE_FACTOR * 0.5);
-
-  if (Math.abs(angleDiff) > 0.7) speedFactor = Math.min(speedFactor, 0.15);
-  else if (Math.abs(angleDiff) > 0.4) speedFactor = Math.min(speedFactor, 0.4);
-  else if (Math.abs(angleDiff) > 0.2) speedFactor = Math.min(speedFactor, 0.65);
-
+  updated.sensors = sensorReadings;
+  
+  const knnResult = knnOnWaypoints(updated, network, kValue, localQuery.points);
+  const dx = knnResult.targetX - updated.x, dy = knnResult.targetY - updated.y;
+  const targetAngle = Math.atan2(dy, dx);
+  let angleDiff = targetAngle - updated.angle;
+  while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+  while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+  
   let nearestIxDist = Infinity;
   for (const ix of network.intersections) {
     const d = dist2D({ x: updated.x, y: updated.y }, ix);
     if (d < nearestIxDist) nearestIxDist = d;
   }
+  
+  const decision = computeAvoidanceDecision(sensorReadings, nearestIxDist);
+  const collisionRisk = decision.risk;
+  
+  let speedFactor = knnResult.speedFactor;
+  let finalAngleDiff = angleDiff;
+  
+  if (decision.overrideNavigation) {
+    speedFactor = decision.speedFactor;
+    finalAngleDiff = decision.correction;
+  } else if (decision.dangerLevel === 'warning') {
+    speedFactor = Math.min(speedFactor, decision.speedFactor);
+    finalAngleDiff = angleDiff * 0.3 + decision.correction * 0.7;
+  } else {
+    finalAngleDiff = angleDiff + decision.correction * 0.4;
+  }
+  
+  const midIdx = Math.floor(NUM_SENSORS / 2);
+  const frontClearance = sensorReadings[midIdx];
+  
+  if (frontClearance < EMERGENCY_STOP) {
+    speedFactor = 0.05;
+    if (decision.correction === 0) {
+      const leftSpace = sensorReadings[1] + sensorReadings[2];
+      const rightSpace = sensorReadings[4] + sensorReadings[5];
+      finalAngleDiff = leftSpace > rightSpace ? -0.7 : 0.7;
+    }
+  } else if (frontClearance < SAFE_DISTANCE_FACTOR) {
+    speedFactor = Math.min(speedFactor, frontClearance / SAFE_DISTANCE_FACTOR * 0.3);
+  }
+  
   if (nearestIxDist < INTERSECTION_STOP_RADIUS) {
     speedFactor = Math.min(speedFactor, 0.18);
   } else if (nearestIxDist < INTERSECTION_SLOWDOWN_RADIUS) {
     const t = (nearestIxDist - INTERSECTION_STOP_RADIUS) / (INTERSECTION_SLOWDOWN_RADIUS - INTERSECTION_STOP_RADIUS);
     speedFactor = Math.min(speedFactor, 0.18 + t * 0.42);
   }
-
+  
   const legalSpeedFactor = Math.min(1, SPEED_LIMIT_KMH / (MAX_SPEED * 3.6));
   speedFactor = Math.min(speedFactor, legalSpeedFactor);
-
+  
+  finalAngleDiff = Math.max(-1.0, Math.min(1.0, finalAngleDiff));
+  
   const targetSpeed = MAX_SPEED * speedFactor;
   updated.vitesse += (targetSpeed - updated.vitesse) * ACCEL_FACTOR;
-  updated.vitesse = Math.max(MIN_SPEED, Math.min(MAX_SPEED, updated.vitesse));
-  updated.angle += angleDiff * STEER_FACTOR;
+  updated.vitesse = Math.max(MIN_SPEED * 0.3, Math.min(MAX_SPEED, updated.vitesse));
+  
+  updated.angle += finalAngleDiff * STEER_FACTOR;
   updated.x += Math.cos(updated.angle) * updated.vitesse;
   updated.y += Math.sin(updated.angle) * updated.vitesse;
   
@@ -716,11 +776,14 @@ function tickCar(car: CarState, network: MergedNetwork, grid: SpatialGrid, kValu
     updated.score += updated.vitesse * 0.1;
     updated.coverage++;
   }
-  updated.sensors = sensorReadings;
-  return updated;
+  
+  return { car: updated, collisionRisk, situation: decision.situation };
 }
 
-// ── tickCar avec modèle KNN (mode inférence) ─────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// ══ tickCarWithModel AVEC ÉVITEMENT ACTIF (mode inférence) ═════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+
 function tickCarWithModel(
   car: CarState,
   network: MergedNetwork,
@@ -731,11 +794,10 @@ function tickCarWithModel(
   carLengthPx: number,
   carWidthPx: number,
   sensorLength: number
-): { car: CarState; confidence: number; context: TrainingSample['context'] } {
+): { car: CarState; confidence: number; context: TrainingSample['context']; collisionRisk: number; situation: string } {
   const updated = { ...car };
   const localQuery = grid.query(updated.x, updated.y);
 
-  // 1. Calculer les capteurs
   const sensorReadings: number[] = [];
   for (let i = 0; i < NUM_SENSORS; i++) {
     const rayAngle = updated.angle + SENSOR_ANGLES[i];
@@ -745,50 +807,62 @@ function tickCarWithModel(
   }
   updated.sensors = sensorReadings;
 
-  // 2. Déterminer le contexte
   let context: TrainingSample['context'] = 'straight';
-  const nearestIxDist = network.intersections.reduce((min, ix) => 
-    Math.min(min, dist2D({ x: updated.x, y: updated.y }, ix)), Infinity);
-  
+  let nearestIxDist = Infinity;
+  for (const ix of network.intersections) {
+    const d = dist2D({ x: updated.x, y: updated.y }, ix);
+    if (d < nearestIxDist) nearestIxDist = d;
+  }
   if (nearestIxDist < INTERSECTION_SLOWDOWN_RADIUS) context = 'intersection';
   else if (Math.abs(sensorReadings[0] - sensorReadings[6]) > 0.3) context = 'turn';
   else if (updated.stuckFrames > 5) context = 'stuck';
 
-  // 3. Prédiction KNN
+  const decision = computeAvoidanceDecision(sensorReadings, nearestIxDist);
+  const collisionRisk = decision.risk;
+
   const prediction = brain.predict(sensorReadings, kValue, context);
 
-  // 4. Appliquer la prédiction avec sécurités
   let speedFactor = prediction.confidence > 0.2 ? prediction.speedFactor : 0.3;
   let angleDiff = prediction.confidence > 0.2 ? prediction.angleDiff : 0;
 
-  // Sécurités physiques
-  const midIdx = Math.floor(NUM_SENSORS / 2);
-  const frontClearance = sensorReadings[midIdx];
-  
-  if (frontClearance < 0.18) speedFactor = 0;
-  else if (frontClearance < SAFE_DISTANCE_FACTOR) {
-    speedFactor = Math.min(speedFactor, frontClearance / SAFE_DISTANCE_FACTOR * 0.5);
+  if (decision.overrideNavigation) {
+    speedFactor = decision.speedFactor;
+    angleDiff = decision.correction;
+    context = 'danger';
+  } else if (decision.dangerLevel === 'warning') {
+    speedFactor = Math.min(speedFactor, decision.speedFactor);
+    angleDiff = angleDiff * 0.3 + decision.correction * 0.7;
+    if (collisionRisk > 0.5) context = 'danger';
+  } else {
+    angleDiff = angleDiff + decision.correction * 0.4;
   }
 
-  if (nearestIxDist < INTERSECTION_STOP_RADIUS) {
-    speedFactor = Math.min(speedFactor, 0.18);
-  } else if (nearestIxDist < INTERSECTION_SLOWDOWN_RADIUS) {
+  const midIdx = Math.floor(NUM_SENSORS / 2);
+  const frontClearance = sensorReadings[midIdx];
+  if (frontClearance < EMERGENCY_STOP) {
+    speedFactor = 0.05;
+    if (angleDiff === 0) {
+      const leftSpace = sensorReadings[1] + sensorReadings[2];
+      const rightSpace = sensorReadings[4] + sensorReadings[5];
+      angleDiff = leftSpace > rightSpace ? -0.7 : 0.7;
+    }
+  } else if (frontClearance < SAFE_DISTANCE_FACTOR) {
+    speedFactor = Math.min(speedFactor, frontClearance / SAFE_DISTANCE_FACTOR * 0.3);
+  }
+  if (nearestIxDist < INTERSECTION_STOP_RADIUS) speedFactor = Math.min(speedFactor, 0.18);
+  else if (nearestIxDist < INTERSECTION_SLOWDOWN_RADIUS) {
     const t = (nearestIxDist - INTERSECTION_STOP_RADIUS) / (INTERSECTION_SLOWDOWN_RADIUS - INTERSECTION_STOP_RADIUS);
     speedFactor = Math.min(speedFactor, 0.18 + t * 0.42);
   }
+  angleDiff = Math.max(-1.0, Math.min(1.0, angleDiff));
 
-  angleDiff = Math.max(-0.8, Math.min(0.8, angleDiff));
-
-  // 5. Appliquer mouvement
   const targetSpeed = MAX_SPEED * speedFactor;
   updated.vitesse += (targetSpeed - updated.vitesse) * ACCEL_FACTOR;
-  updated.vitesse = Math.max(MIN_SPEED, Math.min(MAX_SPEED, updated.vitesse));
-  
+  updated.vitesse = Math.max(MIN_SPEED * 0.3, Math.min(MAX_SPEED, updated.vitesse));
   updated.angle += angleDiff * STEER_FACTOR;
   updated.x += Math.cos(updated.angle) * updated.vitesse;
   updated.y += Math.sin(updated.angle) * updated.vitesse;
 
-  // 6. Anti-stuck
   const progressDist = Math.sqrt((updated.x - updated.lastX) ** 2 + (updated.y - updated.lastY) ** 2);
   if (progressDist > 2) {
     updated.stuckFrames = 0;
@@ -797,7 +871,6 @@ function tickCarWithModel(
   } else {
     updated.stuckFrames++;
   }
-
   if (updated.stuckFrames > ANTI_STUCK_FRAMES) {
     updated.angle += Math.PI / 4;
     updated.vitesse = Math.min(MAX_SPEED, MIN_SPEED * 1.5);
@@ -808,7 +881,6 @@ function tickCarWithModel(
     updated.stuckFrames = 0;
   }
 
-  // Collision
   const cosA = Math.cos(updated.angle), sinA = Math.sin(updated.angle);
   const hw = carWidthPx / 2, hl = carLengthPx / 2;
   const corners = [
@@ -817,7 +889,6 @@ function tickCarWithModel(
     { x: updated.x - cosA * hl - sinA * hw, y: updated.y - sinA * hl + cosA * hw },
     { x: updated.x - cosA * hl + sinA * hw, y: updated.y - sinA * hl - cosA * hw },
   ];
-
   let anyCornerOutside = false;
   for (const c of corners) {
     let minCornerDist = Infinity;
@@ -828,18 +899,17 @@ function tickCarWithModel(
     if (minCornerDist > roadWidth / 2) { anyCornerOutside = true; break; }
   }
   if (anyCornerOutside) updated.alive = false;
-
   if (updated.alive) {
     updated.score += updated.vitesse * 0.1;
     updated.coverage++;
   }
 
-  return { car: updated, confidence: prediction.confidence, context };
+  return { car: updated, confidence: prediction.confidence, context, collisionRisk, situation: decision.situation };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ═══ COMPOSANT PRINCIPAL ═══════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
+// ═ COMPOSANT PRINCIPAL ═══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
 
 export default function KnnRealRoad() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -860,7 +930,6 @@ export default function KnnRealRoad() {
   const totalDistanceRef = useRef(0);
   const lastPosRef = useRef<Vec2 | null>(null);
 
-  // ── Refs KNN ─────────────────────────────────────────────────────────────────
   const brainRef = useRef<KNNBrain>(new KNNBrain());
   const trainingStartTimeRef = useRef<number>(0);
   const lastKnnResultRef = useRef<KnnResult | null>(null);
@@ -889,7 +958,6 @@ export default function KnnRealRoad() {
   const [modelName, setModelName] = useState('');
   const [isModelLoaded, setIsModelLoaded] = useState(false);
 
-  // ── Nouveaux états KNN ─────────────────────────────────────────────────────
   const [mode, setMode] = useState<'manual' | 'training' | 'inference'>('manual');
   const [trainingSamples, setTrainingSamples] = useState(0);
   const [inferenceConfidence, setInferenceConfidence] = useState(0);
@@ -898,22 +966,21 @@ export default function KnnRealRoad() {
   const [showKNNPanel, setShowKNNPanel] = useState(false);
   const [selectedKNNModel, setSelectedKNNModel] = useState<KNNModel | null>(null);
   const [knnModelName, setKnnModelName] = useState('');
+  
+  const [collisionRisk, setCollisionRisk] = useState(0);
+  const [situation, setSituation] = useState('Route libre');
+  const [apiRoutesLoaded, setApiRoutesLoaded] = useState(false);
+
+  // ═══ NOUVEAU : Panneau éducatif KNN ═══
+  const [showKnnGuide, setShowKnnGuide] = useState(false);
+  const [activeGuideTab, setActiveGuideTab] = useState<'formula' | 'steps' | 'types' | 'tips'>('formula');
 
   const createCar = (x: number, y: number, angle: number) => {
     const id = nextIdRef.current++;
     return { 
-      id, 
-      x, 
-      y, 
-      angle, 
-      vitesse: 0, 
-      alive: true, 
-      score: 0, 
-      sensors: new Array(NUM_SENSORS).fill(1), 
-      stuckFrames: 0, 
-      lastX: x, 
-      lastY: y, 
-      coverage: 0 
+      id, x, y, angle, vitesse: 0, alive: true, score: 0, 
+      sensors: new Array(NUM_SENSORS).fill(1), stuckFrames: 0, 
+      lastX: x, lastY: y, coverage: 0 
     };
   };
 
@@ -924,24 +991,21 @@ export default function KnnRealRoad() {
     if (car.alive) return;
     
     let minDist = Infinity;
-    let bestPoint = null;
+    let bestPoint: Vec2 | null = null;
     let bestAngle = 0;
     
     for (const segment of network.segments) {
       for (let i = 0; i < segment.length - 1; i++) {
         const a = segment[i];
         const b = segment[i + 1];
-        
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const lenSq = dx * dx + dy * dy;
         if (lenSq < 0.001) continue;
-        
         const t = Math.max(0, Math.min(1, ((car.x - a.x) * dx + (car.y - a.y) * dy) / lenSq));
         const projX = a.x + t * dx;
         const projY = a.y + t * dy;
         const dist = dist2D({ x: projX, y: projY }, { x: car.x, y: car.y });
-        
         if (dist < minDist) {
           minDist = dist;
           bestPoint = { x: projX, y: projY };
@@ -954,7 +1018,6 @@ export default function KnnRealRoad() {
       const offset = 5;
       bestPoint.x += (Math.random() - 0.5) * offset;
       bestPoint.y += (Math.random() - 0.5) * offset;
-      
       carRef.current = createCar(bestPoint.x, bestPoint.y, bestAngle);
       lastPosRef.current = { x: bestPoint.x, y: bestPoint.y };
       ghostTrailRef.current = [];
@@ -962,10 +1025,7 @@ export default function KnnRealRoad() {
       setRespawnCount(prev => prev + 1);
       setShowRespawn(true);
       setIsModelLoaded(false);
-      
-      setTimeout(() => {
-        setShowRespawn(false);
-      }, 2000);
+      setTimeout(() => setShowRespawn(false), 2000);
     }
   };
 
@@ -984,33 +1044,21 @@ export default function KnnRealRoad() {
 
   const loadModel = (model: SavedModel) => {
     if (!networkRef.current) return;
-    const network = networkRef.current;
-    if (network.segments.length === 0) return;
-    
     const car = carRef.current;
     if (!car) return;
-    
     carRef.current = createCar(model.carData.x, model.carData.y, model.carData.angle);
     carRef.current.vitesse = model.carData.vitesse;
     carRef.current.score = model.score;
     carRef.current.coverage = model.coverage;
-    
     setScore(model.score);
     setSelectedModel(model);
     setIsModelLoaded(true);
     setShowModelPanel(false);
-    
-    const msg = document.createElement('div');
-    msg.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-900/95 backdrop-blur px-6 py-3 rounded-2xl text-base text-emerald-100 border-2 border-emerald-500 font-bold shadow-lg shadow-emerald-900/50 animate-bounce';
-    msg.textContent = `✅ Modèle "${model.name}" chargé avec succès !`;
-    document.body.appendChild(msg);
-    setTimeout(() => msg.remove(), 3000);
   };
 
   const saveCurrentModel = () => {
     const car = carRef.current;
     if (!car || !networkRef.current) return;
-    
     const network = networkRef.current;
     const model: SavedModel = {
       id: `model_${Date.now()}`,
@@ -1021,52 +1069,33 @@ export default function KnnRealRoad() {
       coverage: car.coverage,
       totalIntersections: network.intersections.length,
       kValue: kValue,
-      carData: {
-        x: car.x,
-        y: car.y,
-        angle: car.angle,
-        vitesse: car.vitesse
-      }
+      carData: { x: car.x, y: car.y, angle: car.angle, vitesse: car.vitesse }
     };
-    
     saveModelToStorage(model);
     setSavedModels(getSavedModels());
     setModelName('');
     setShowModelPanel(false);
-    
-    const msg = document.createElement('div');
-    msg.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-blue-900/95 backdrop-blur px-6 py-3 rounded-2xl text-base text-blue-100 border-2 border-blue-500 font-bold shadow-lg shadow-blue-900/50 animate-bounce';
-    msg.textContent = `💾 Modèle "${model.name}" sauvegardé !`;
-    document.body.appendChild(msg);
-    setTimeout(() => msg.remove(), 3000);
   };
 
   const deleteModel = (id: string) => {
     deleteModelFromStorage(id);
     setSavedModels(getSavedModels());
-    if (selectedModel?.id === id) {
-      setSelectedModel(null);
-      setIsModelLoaded(false);
-    }
+    if (selectedModel?.id === id) { setSelectedModel(null); setIsModelLoaded(false); }
   };
 
-  // ── Fonctions KNN ──────────────────────────────────────────────────────────────
   const startTraining = () => {
     brainRef.current = new KNNBrain();
     brainRef.current.startTraining();
     trainingStartTimeRef.current = performance.now();
     setMode('training');
     setTrainingSamples(0);
-    if (!carRef.current || !carRef.current.alive) {
-      spawnCar();
-    }
+    if (!carRef.current || !carRef.current.alive) spawnCar();
     setRunning(true);
   };
 
   const stopTrainingAndSave = () => {
     brainRef.current.stopTraining();
     const duration = performance.now() - trainingStartTimeRef.current;
-    
     const model = brainRef.current.exportModel(
       knnModelName || `KNN_${new Date().toLocaleTimeString()}`, 
       {
@@ -1078,18 +1107,11 @@ export default function KnnRealRoad() {
         trainingDuration: duration
       }
     );
-
     saveKNNModelToStorage(model);
     setSavedKNNModels(getSavedKNNModels());
     setKnnModelName('');
     setMode('manual');
     setRunning(false);
-    
-    const msg = document.createElement('div');
-    msg.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-900/95 backdrop-blur px-6 py-3 rounded-2xl text-base text-emerald-100 border-2 border-emerald-500 font-bold shadow-lg';
-    msg.textContent = `🧠 Modèle KNN entraîné : ${model.metadata.totalSamples} échantillons en ${(duration/1000).toFixed(1)}s`;
-    document.body.appendChild(msg);
-    setTimeout(() => msg.remove(), 4000);
   };
 
   const startInference = (model: KNNModel) => {
@@ -1097,19 +1119,14 @@ export default function KnnRealRoad() {
     setSelectedKNNModel(model);
     setMode('inference');
     setShowKNNPanel(false);
-    if (!carRef.current || !carRef.current.alive) {
-      spawnCar();
-    }
+    if (!carRef.current || !carRef.current.alive) spawnCar();
     setRunning(true);
   };
 
   const deleteKNNModel = (id: string) => {
     deleteKNNModelFromStorage(id);
     setSavedKNNModels(getSavedKNNModels());
-    if (selectedKNNModel?.id === id) {
-      setSelectedKNNModel(null);
-      setMode('manual');
-    }
+    if (selectedKNNModel?.id === id) { setSelectedKNNModel(null); setMode('manual'); }
   };
 
   useEffect(() => {
@@ -1125,18 +1142,24 @@ export default function KnnRealRoad() {
       const t0 = performance.now();
       let apiRoutes: ApiRoute[];
       try {
-        const res = await fetchWithTimeout('https://emihack.onrender.com/routes/all', 4000);
+        const res = await fetchWithTimeout('https://emihack.onrender.com/routes/all', 8000);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         const routes: ApiRoute[] = Array.isArray(data) ? data : data.routes || [];
         const valid = routes.filter((r) => r.coordinates && r.coordinates.length >= 2);
         if (valid.length === 0) throw new Error('empty');
         apiRoutes = valid;
-        if (!cancelled) setDataSource(`API (${Math.round(performance.now() - t0)}ms)`);
+        if (!cancelled) {
+          setDataSource(`API OpenStreetMap (${Math.round(performance.now() - t0)}ms)`);
+          setApiRoutesLoaded(true);
+        }
       } catch (err) {
         console.warn('API en échec, bascule sur mock local:', err);
         apiRoutes = MOCK_ROUTES;
-        if (!cancelled) setDataSource(`Mock (${Math.round(performance.now() - t0)}ms)`);
+        if (!cancelled) {
+          setDataSource(`Mock local (${Math.round(performance.now() - t0)}ms)`);
+          setApiRoutesLoaded(false);
+        }
       }
       if (cancelled) return;
 
@@ -1160,7 +1183,7 @@ export default function KnnRealRoad() {
       networkRef.current = network;
 
       const mpp = getMetersPerPixel(cLat, OSM_ZOOM);
-      roadWidthRef.current = Math.max(6, Math.round(ROAD_WIDTH_METERS / mpp * ROAD_VISUAL_FACTOR));
+      roadWidthRef.current = Math.max(8, Math.round(ROAD_WIDTH_METERS / mpp * ROAD_VISUAL_FACTOR));
       const ppm = 1 / mpp;
       carDimRef.current = {
         carLengthPx: Math.max(0.5, CAR_LENGTH_METERS * ppm * 100),
@@ -1174,12 +1197,10 @@ export default function KnnRealRoad() {
         const borders = buildSmoothBorders(chain, roadWidthRef.current / 2);
         segBorders.push(borders);
       }
-
       gridRef.current = new SpatialGrid(segBorders, network.allPoints, network.chains);
 
       setRoutesCount(apiRoutes.length);
       setIntersectionsCount(network.intersections.length);
-      
       setPhase('ready');
 
       const z = OSM_ZOOM;
@@ -1200,16 +1221,12 @@ export default function KnnRealRoad() {
         }
       }
       setTilesLoaded(loaded);
-      
       spawnCar();
     })();
 
     return () => { 
       cancelled = true;
-      if (respawnTimerRef.current) {
-        clearTimeout(respawnTimerRef.current);
-        respawnTimerRef.current = null;
-      }
+      if (respawnTimerRef.current) { clearTimeout(respawnTimerRef.current); respawnTimerRef.current = null; }
     };
   }, []);
 
@@ -1232,37 +1249,28 @@ export default function KnnRealRoad() {
     if (car.alive && running) {
       const cd = carDimRef.current;
       let updated: CarState;
+      let newCollisionRisk = 0;
+      let newSituation = 'Route libre';
       
       if (mode === 'inference' && brainRef.current.getSampleCount() > 0) {
-        // Mode KNN autonome
         const result = tickCarWithModel(
-          car, 
-          network, 
-          grid, 
-          brainRef.current, 
-          kValue, 
-          roadWidthRef.current, 
-          cd.carLengthPx, 
-          cd.carWidthPx, 
-          cd.sensorLength
+          car, network, grid, brainRef.current, kValue, 
+          roadWidthRef.current, cd.carLengthPx, cd.carWidthPx, cd.sensorLength
         );
         updated = result.car;
         setInferenceConfidence(result.confidence);
         setInferenceContext(result.context);
+        newCollisionRisk = result.collisionRisk;
+        newSituation = result.situation;
       } else {
-        // Mode manuel ou entraînement
-        updated = tickCar(
-          car, 
-          network, 
-          grid, 
-          kValue, 
-          roadWidthRef.current, 
-          cd.carLengthPx, 
-          cd.carWidthPx, 
-          cd.sensorLength
+        const result = tickCar(
+          car, network, grid, kValue, 
+          roadWidthRef.current, cd.carLengthPx, cd.carWidthPx, cd.sensorLength
         );
+        updated = result.car;
+        newCollisionRisk = result.collisionRisk;
+        newSituation = result.situation;
         
-        // Si en entraînement, enregistrer l'échantillon
         if (mode === 'training' && brainRef.current.getIsTraining()) {
           const localQuery = grid.query(car.x, car.y);
           const knnResult = knnOnWaypoints(car, network, kValue, localQuery.points);
@@ -1276,13 +1284,13 @@ export default function KnnRealRoad() {
           while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
           
           const speedFactor = updated.vitesse / MAX_SPEED;
-
           let context: TrainingSample['context'] = 'straight';
           const nearestIxDist = network.intersections.reduce((min, ix) => 
             Math.min(min, dist2D({ x: car.x, y: car.y }, ix)), Infinity);
           if (nearestIxDist < INTERSECTION_SLOWDOWN_RADIUS) context = 'intersection';
           else if (Math.abs(car.sensors[0] - car.sensors[6]) > 0.3) context = 'turn';
           else if (car.stuckFrames > 5) context = 'stuck';
+          if (newCollisionRisk > 0.5) context = 'danger';
 
           brainRef.current.recordSample({
             sensors: [...car.sensors],
@@ -1297,13 +1305,11 @@ export default function KnnRealRoad() {
         }
       }
       
-      // Calculer la distance parcourue
       if (lastPosRef.current) {
         const dist = dist2D(lastPosRef.current, { x: updated.x, y: updated.y });
         totalDistanceRef.current += dist;
       }
       lastPosRef.current = { x: updated.x, y: updated.y };
-      
       carRef.current = updated;
       
       const trail = ghostTrailRef.current;
@@ -1315,19 +1321,14 @@ export default function KnnRealRoad() {
       setScore(updated.score);
       setSpeed(updated.vitesse * 3.6);
       setSensors(updated.sensors);
+      setCollisionRisk(newCollisionRisk);
+      setSituation(newSituation);
       
       if (!updated.alive && !isRespawningRef.current) {
         isRespawningRef.current = true;
-        
-        if (respawnTimerRef.current) {
-          clearTimeout(respawnTimerRef.current);
-          respawnTimerRef.current = null;
-        }
-        
+        if (respawnTimerRef.current) { clearTimeout(respawnTimerRef.current); respawnTimerRef.current = null; }
         respawnTimerRef.current = setTimeout(() => {
-          if (carRef.current && !carRef.current.alive) {
-            spawnCarNearestRoad();
-          }
+          if (carRef.current && !carRef.current.alive) spawnCarNearestRoad();
           isRespawningRef.current = false;
           respawnTimerRef.current = null;
         }, RESPAWN_DELAY);
@@ -1357,10 +1358,7 @@ export default function KnnRealRoad() {
 
     if (!meta || !car) { animRef.current = requestAnimationFrame(animate); return; }
 
-    const camX = car.x;
-    const camY = car.y;
-    const zoom = zoomRef.current;
-
+    const camX = car.x, camY = car.y, zoom = zoomRef.current;
     ctx.save();
     ctx.translate(W / 2, H / 2);
     ctx.scale(zoom, zoom);
@@ -1388,22 +1386,24 @@ export default function KnnRealRoad() {
     for (const chain of network.chains) {
       if (chain.length < 2) continue;
       const smooth = sampleSmoothCenter(chain, 8);
-      ctx.strokeStyle = '#334155'; ctx.lineWidth = rw + 4;
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)'; ctx.lineWidth = rw + 6;
       ctx.beginPath(); drawSmoothPath(ctx, smooth); ctx.stroke();
       ctx.strokeStyle = '#ffffff'; ctx.lineWidth = rw;
       ctx.beginPath(); drawSmoothPath(ctx, smooth); ctx.stroke();
-      ctx.strokeStyle = '#eab308'; ctx.lineWidth = 1.5; ctx.setLineDash([12, 10]);
+      ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2; ctx.setLineDash([15, 12]);
       ctx.beginPath(); drawSmoothPath(ctx, smooth); ctx.stroke(); ctx.setLineDash([]);
     }
     for (const ix of network.intersections) {
-      ctx.fillStyle = '#a78bfa'; ctx.beginPath(); ctx.arc(ix.x, ix.y, 5, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.shadowColor = '#a78bfa'; ctx.shadowBlur = 10;
+      ctx.fillStyle = '#a78bfa'; ctx.beginPath(); ctx.arc(ix.x, ix.y, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 2; ctx.stroke();
     }
 
     const trail = ghostTrailRef.current;
     if (trail.length > 2) {
-      ctx.strokeStyle = 'rgba(234, 179, 8, 0.3)'; ctx.lineWidth = 4;
-      ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.setLineDash([8, 6]);
+      ctx.strokeStyle = 'rgba(234, 179, 8, 0.4)'; ctx.lineWidth = 5;
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.setLineDash([10, 8]);
       ctx.beginPath(); ctx.moveTo(trail[0].x, trail[0].y);
       for (let i = 1; i < trail.length; i++) ctx.lineTo(trail[i].x, trail[i].y);
       ctx.stroke(); ctx.setLineDash([]);
@@ -1418,53 +1418,50 @@ export default function KnnRealRoad() {
         const endX = car.x + Math.cos(rayAngles[i]) * len, endY = car.y + Math.sin(rayAngles[i]) * len;
         const ratio = len / sLen;
         const r = Math.round((1 - ratio) * 255), g = Math.round(ratio * 255);
-        ctx.strokeStyle = `rgba(${r}, ${g}, 50, 0.8)`;
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = `rgba(${r}, ${g}, 50, 0.9)`;
+        ctx.lineWidth = 2.5;
         ctx.beginPath(); ctx.moveTo(car.x, car.y); ctx.lineTo(endX, endY); ctx.stroke();
-        
-        ctx.fillStyle = 'rgba(255,255,255,0.7)';
-        ctx.font = '8px monospace';
-        ctx.fillText(`${(car.sensors[i] * 100).toFixed(0)}%`, endX + 5, endY - 5);
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.font = 'bold 9px monospace';
+        ctx.fillText(`${(car.sensors[i] * 100).toFixed(0)}%`, endX + 6, endY - 6);
       }
     }
     
     ctx.save(); ctx.translate(car.x, car.y); ctx.rotate(car.angle);
-    // Couleur différente selon le mode
     let carColor = '#ef4444';
     if (mode === 'training') carColor = '#a855f7';
     else if (mode === 'inference') carColor = '#06b6d4';
     else if (isModelLoaded) carColor = '#22c55e';
+    if (collisionRisk > 0.6 && car.alive) carColor = '#dc2626';
+    else if (collisionRisk > 0.35 && car.alive) carColor = '#f59e0b';
     
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)'; ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
     ctx.fillStyle = car.alive ? carColor : '#444444';
-    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2;
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.5;
     const r = Math.min(2, carW * 0.2);
     ctx.beginPath(); 
-    // @ts-ignore - roundRect disponible dans les navigateurs modernes
-    if (ctx.roundRect) {
-      ctx.roundRect(-carW / 2, -carL / 2, carW, carL, r);
-    } else {
-      ctx.rect(-carW / 2, -carL / 2, carW, carL);
-    }
+    // @ts-ignore
+    if (ctx.roundRect) ctx.roundRect(-carW / 2, -carL / 2, carW, carL, r);
+    else ctx.rect(-carW / 2, -carL / 2, carW, carL);
     ctx.fill(); ctx.stroke();
+    ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
     const headX = carW * 0.35, headY = carL * 0.15;
     ctx.fillStyle = '#fef08a';
     ctx.fillRect(headX, -headY, carW * 0.12, carW * 0.12);
     ctx.fillRect(headX , headY - carW * 0.12, carW * 0.12, carW * 0.12);
     ctx.restore();
-    
     ctx.restore();
     
     animRef.current = requestAnimationFrame(animate);
-  }, [kValue, showSensors, isModelLoaded, mode]);
+  }, [kValue, showSensors, isModelLoaded, mode, collisionRisk]);
 
   useEffect(() => {
     if (running) animRef.current = requestAnimationFrame(animate);
     return () => {
       cancelAnimationFrame(animRef.current);
-      if (respawnTimerRef.current) {
-        clearTimeout(respawnTimerRef.current);
-        respawnTimerRef.current = null;
-      }
+      if (respawnTimerRef.current) { clearTimeout(respawnTimerRef.current); respawnTimerRef.current = null; }
     };
   }, [running, animate]);
 
@@ -1498,9 +1495,7 @@ export default function KnnRealRoad() {
 
   const handleStart = () => {
     if (phase !== 'ready') return;
-    if (!carRef.current || !carRef.current.alive) {
-      spawnCar();
-    }
+    if (!carRef.current || !carRef.current.alive) spawnCar();
     setRunning(true);
   };
   
@@ -1519,12 +1514,7 @@ export default function KnnRealRoad() {
           coverage: car.coverage,
           totalIntersections: network.intersections.length,
           kValue: kValue,
-          carData: {
-            x: car.x,
-            y: car.y,
-            angle: car.angle,
-            vitesse: car.vitesse
-          }
+          carData: { x: car.x, y: car.y, angle: car.angle, vitesse: car.vitesse }
         };
         saveModelToStorage(autoModel);
         setSavedModels(getSavedModels());
@@ -1535,10 +1525,7 @@ export default function KnnRealRoad() {
   const handleReset = () => {
     setRunning(false);
     setMode('manual');
-    if (respawnTimerRef.current) {
-      clearTimeout(respawnTimerRef.current);
-      respawnTimerRef.current = null;
-    }
+    if (respawnTimerRef.current) { clearTimeout(respawnTimerRef.current); respawnTimerRef.current = null; }
     isRespawningRef.current = false;
     spawnCar();
     ghostTrailRef.current = [];
@@ -1553,23 +1540,20 @@ export default function KnnRealRoad() {
     setSelectedModel(null);
     setInferenceConfidence(0);
     setInferenceContext('—');
+    setCollisionRisk(0);
+    setSituation('Route libre');
   };
 
   const speedKmh = speed.toFixed(1);
   const sensorLabels = ['Extrême G', 'Gauche', 'Centre-G', 'Centre', 'Centre-D', 'Droite', 'Extrême D'];
 
-  // ── Badge de mode ────────────────────────────────────────────────────────────
   const getModeBadge = () => {
     switch (mode) {
-      case 'training':
-        return { text: '🧠 ENTRAÎNEMENT', color: 'bg-purple-600', textColor: 'text-purple-100' };
-      case 'inference':
-        return { text: '🤖 KNN AUTONOME', color: 'bg-cyan-600', textColor: 'text-cyan-100' };
-      default:
-        return { text: '👤 MANUEL', color: 'bg-gray-600', textColor: 'text-gray-100' };
+      case 'training': return { text: '🧠 ENTRAÎNEMENT', color: 'bg-purple-600', textColor: 'text-purple-100' };
+      case 'inference': return { text: ' KNN AUTONOME', color: 'bg-cyan-600', textColor: 'text-cyan-100' };
+      default: return { text: '👤 MANUEL', color: 'bg-gray-600', textColor: 'text-gray-100' };
     }
   };
-
   const modeBadge = getModeBadge();
 
   return (
@@ -1578,65 +1562,78 @@ export default function KnnRealRoad() {
         <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden relative">
           <canvas ref={canvasRef} className="w-full h-full block" style={{ minHeight: 'calc(100vh - 200px)' }} />
           
-          {/* Badge de mode */}
           <div className={`absolute top-4 right-4 z-10 ${modeBadge.color} backdrop-blur px-3 py-1.5 rounded-full text-xs font-bold ${modeBadge.textColor} border border-white/20 shadow-lg`}>
             {modeBadge.text}
+          </div>
+
+          <div className={`absolute top-4 left-4 z-10 backdrop-blur px-4 py-2 rounded-lg text-xs font-bold border shadow-lg transition-all duration-300 ${
+            collisionRisk > 0.6 
+              ? 'bg-red-900/90 text-red-100 border-red-500 animate-pulse' 
+              : collisionRisk > 0.35 
+              ? 'bg-amber-900/90 text-amber-100 border-amber-500' 
+              : 'bg-emerald-900/90 text-emerald-100 border-emerald-500'
+          }`}>
+            <div className="flex items-center gap-2">
+              <span className="text-lg">{collisionRisk > 0.6 ? '⚠️' : collisionRisk > 0.35 ? '⚡' : '✅'}</span>
+              <div>
+                <div className="text-[10px] opacity-70 uppercase tracking-wider">Risque collision</div>
+                <div className="text-base font-mono font-bold">{(collisionRisk * 100).toFixed(0)}%</div>
+              </div>
+            </div>
+            <div className="mt-1 h-1.5 bg-black/30 rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all duration-200" style={{ 
+                width: `${collisionRisk * 100}%`,
+                backgroundColor: collisionRisk > 0.6 ? '#ef4444' : collisionRisk > 0.35 ? '#f59e0b' : '#22c55e'
+              }} />
+            </div>
+            <div className="mt-1 text-[9px] opacity-80 italic">🎯 {situation}</div>
           </div>
 
           <div className="absolute bottom-6 right-4 z-10 flex flex-col gap-1.5">
             <button onClick={handleZoomIn} className="w-8 h-8 bg-gray-800/90 hover:bg-gray-700 text-gray-300 rounded-lg text-sm font-bold border border-gray-700 cursor-pointer transition-colors flex items-center justify-center">+</button>
             <button onClick={handleZoomReset} className="w-8 h-8 bg-gray-800/90 hover:bg-gray-700 text-gray-300 rounded-lg text-[10px] font-mono border border-gray-700 cursor-pointer transition-colors flex items-center justify-center">{zoomLevel.toFixed(1)}x</button>
             <button onClick={handleZoomOut} className="w-8 h-8 bg-gray-800/90 hover:bg-gray-700 text-gray-300 rounded-lg text-sm font-bold border border-gray-700 cursor-pointer transition-colors flex items-center justify-center">−</button>
-            <button onClick={toggleSensors} className={`w-8 h-8 ${showSensors ? 'bg-blue-600' : 'bg-gray-700'} hover:bg-blue-500 text-white rounded-lg text-xs font-bold border border-gray-700 cursor-pointer transition-colors flex items-center justify-center`}>
-              📡
-            </button>
-            <button onClick={() => setShowModelPanel(!showModelPanel)} className="w-8 h-8 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-xs font-bold border border-gray-700 cursor-pointer transition-colors flex items-center justify-center">
-              💾
-            </button>
-            <button onClick={() => setShowKNNPanel(!showKNNPanel)} className="w-8 h-8 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold border border-gray-700 cursor-pointer transition-colors flex items-center justify-center">
-              🧠
-            </button>
+            <button onClick={toggleSensors} className={`w-8 h-8 ${showSensors ? 'bg-blue-600' : 'bg-gray-700'} hover:bg-blue-500 text-white rounded-lg text-xs font-bold border border-gray-700 cursor-pointer transition-colors flex items-center justify-center`}>📡</button>
+            <button onClick={() => setShowModelPanel(!showModelPanel)} className="w-8 h-8 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-xs font-bold border border-gray-700 cursor-pointer transition-colors flex items-center justify-center">💾</button>
+            <button onClick={() => setShowKNNPanel(!showKNNPanel)} className="w-8 h-8 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold border border-gray-700 cursor-pointer transition-colors flex items-center justify-center">🧠</button>
+            <button onClick={() => setShowKnnGuide(!showKnnGuide)} className={`w-8 h-8 ${showKnnGuide ? 'bg-amber-500' : 'bg-amber-700'} hover:bg-amber-500 text-white rounded-lg text-xs font-bold border border-gray-700 cursor-pointer transition-colors flex items-center justify-center`} title="Guide KNN">📚</button>
           </div>
           
           {phase === 'fetching' && (
-            <div className="absolute top-4 left-4 z-10 bg-gray-800/90 backdrop-blur px-4 py-2 rounded-full text-xs text-gray-300 border border-gray-700 flex items-center gap-2">
+            <div className="absolute top-16 left-4 z-10 bg-gray-800/90 backdrop-blur px-4 py-2 rounded-full text-xs text-gray-300 border border-gray-700 flex items-center gap-2">
               <div className="w-3 h-3 border-2 border-gray-600 border-t-blue-500 rounded-full animate-spin" />
-              Chargement des routes…
+              Chargement des routes OpenStreetMap…
+            </div>
+          )}
+          {phase === 'ready' && (
+            <div className="absolute top-16 left-4 z-10 bg-gray-800/90 backdrop-blur px-3 py-1.5 rounded-lg text-[10px] text-gray-300 border border-gray-700 flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${apiRoutesLoaded ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              {apiRoutesLoaded ? 'Routes API chargées' : 'Routes mock'}
             </div>
           )}
           {phase === 'ready' && tilesLoaded < tilesTotal && (
-            <div className="absolute top-4 left-4 z-10 bg-gray-800/80 backdrop-blur px-3 py-1.5 rounded-full text-[10px] text-gray-400 border border-gray-700">
-              Tuiles: {tilesLoaded}/{tilesTotal}
+            <div className="absolute top-28 left-4 z-10 bg-gray-800/80 backdrop-blur px-3 py-1.5 rounded-full text-[10px] text-gray-400 border border-gray-700">
+              Tuiles OSM: {tilesLoaded}/{tilesTotal}
             </div>
           )}
-          
           {showRespawn && (
             <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 bg-green-900/90 backdrop-blur px-5 py-2.5 rounded-full text-sm text-green-200 border border-green-700 font-semibold animate-bounce">
               🔄 Réapparition au point le plus proche de la route
             </div>
           )}
-          
           {!carRef.current?.alive && carRef.current && !showRespawn && (
             <div className="absolute top-6 left-1/2 -translate-x-1/2 z-10 bg-red-900/90 backdrop-blur px-5 py-2.5 rounded-full text-sm text-red-200 border border-red-700 font-semibold animate-pulse">
               💥 Voiture détruite - Réapparition dans {RESPAWN_DELAY/1000}s...
             </div>
           )}
-
-          {isModelLoaded && mode === 'manual' && (
-            <div className="absolute bottom-20 left-4 z-10 bg-emerald-900/90 backdrop-blur px-3 py-1.5 rounded-lg text-xs text-emerald-200 border border-emerald-700">
-              🧠 Modèle classique chargé
-            </div>
-          )}
-
           {mode === 'inference' && (
             <div className="absolute bottom-20 left-4 z-10 bg-cyan-900/90 backdrop-blur px-3 py-1.5 rounded-lg text-xs text-cyan-200 border border-cyan-700">
               🤖 Confiance: {(inferenceConfidence * 100).toFixed(0)}% | Contexte: {inferenceContext}
             </div>
           )}
-
           {mode === 'training' && (
             <div className="absolute bottom-20 left-4 z-10 bg-purple-900/90 backdrop-blur px-3 py-1.5 rounded-lg text-xs text-purple-200 border border-purple-700 animate-pulse">
-              🧠 Entraînement: {trainingSamples} échantillons
+               Entraînement: {trainingSamples} échantillons
             </div>
           )}
         </div>
@@ -1646,14 +1643,16 @@ export default function KnnRealRoad() {
             <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-1">KNN Road Explorer</p>
             <h2 className="text-lg font-bold text-white">Suivi de route continu</h2>
             <p className="text-xs text-gray-500 mt-1">Voiture: {CAR_LENGTH_METERS*100}cm × {CAR_WIDTH_METERS*100}cm</p>
-            <p className="text-[10px] text-gray-600 mt-1 font-mono">Source: {dataSource}</p>
+            <p className="text-[10px] text-gray-600 mt-1 font-mono flex items-center gap-1">
+              <span className={`w-2 h-2 rounded-full ${apiRoutesLoaded ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+              {dataSource}
+            </p>
             <div className={`mt-2 inline-block px-2 py-0.5 rounded text-[10px] font-bold ${modeBadge.color} ${modeBadge.textColor}`}>
               {modeBadge.text}
             </div>
           </div>
           <hr className="border-gray-800" />
           
-          {/* ── Section Contrôle ─────────────────────────────────────────────── */}
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2">Contrôle</p>
             <div className="flex gap-2 flex-wrap">
@@ -1663,60 +1662,41 @@ export default function KnnRealRoad() {
                   {phase === 'ready' ? '▶ Démarrer' : 'Chargement…'}
                 </button>
               )}
-              
               {mode === 'manual' && running && (
                 <>
-                  <button onClick={handleStop} className="flex-1 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded-lg py-2.5 font-semibold cursor-pointer transition-colors">⏸ Pause</button>
+                  <button onClick={handleStop} className="flex-1 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded-lg py-2.5 font-semibold cursor-pointer transition-colors"> Pause</button>
                   <button onClick={startTraining} disabled={phase !== 'ready'} 
                     className={`flex-1 text-xs rounded-lg py-2.5 font-semibold transition-colors ${phase === 'ready' ? 'bg-purple-600 hover:bg-purple-500 text-white cursor-pointer' : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}>
                     🧠 Entraîner
                   </button>
                 </>
               )}
-              
               {mode === 'training' && (
-                <button onClick={stopTrainingAndSave} 
-                  className="flex-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded-lg py-2.5 font-semibold cursor-pointer transition-colors animate-pulse">
+                <button onClick={stopTrainingAndSave} className="flex-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded-lg py-2.5 font-semibold cursor-pointer transition-colors animate-pulse">
                   ⏹ Arrêter & Sauver ({trainingSamples})
                 </button>
               )}
-              
               {mode === 'inference' && (
                 <>
-                  <button onClick={handleStop} className="flex-1 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded-lg py-2.5 font-semibold cursor-pointer transition-colors">
-                    ⏸ Pause KNN
-                  </button>
-                  <button onClick={() => { setMode('manual'); setRunning(false); }}
-                    className="flex-1 text-xs bg-gray-600 hover:bg-gray-500 text-white rounded-lg py-2.5 font-semibold cursor-pointer transition-colors">
-                    👤 Manuel
-                  </button>
+                  <button onClick={handleStop} className="flex-1 text-xs bg-amber-600 hover:bg-amber-500 text-white rounded-lg py-2.5 font-semibold cursor-pointer transition-colors">⏸ Pause KNN</button>
+                  <button onClick={() => { setMode('manual'); setRunning(false); }} className="flex-1 text-xs bg-gray-600 hover:bg-gray-500 text-white rounded-lg py-2.5 font-semibold cursor-pointer transition-colors"> Manuel</button>
                 </>
               )}
-              
               <button onClick={handleReset} className="flex-1 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg py-2.5 font-medium cursor-pointer transition-colors border border-gray-700">🔄 Reset</button>
             </div>
           </div>
 
-          {/* ── Nom du modèle KNN ──────────────────────────────────────────────── */}
           {mode === 'training' && (
             <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Nom du modèle KNN"
-                value={knnModelName}
-                onChange={(e) => setKnnModelName(e.target.value)}
-                className="flex-1 text-xs bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 placeholder-gray-500 focus:outline-none focus:border-purple-500"
-              />
+              <input type="text" placeholder="Nom du modèle KNN" value={knnModelName} onChange={(e) => setKnnModelName(e.target.value)}
+                className="flex-1 text-xs bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 placeholder-gray-500 focus:outline-none focus:border-purple-500" />
             </div>
           )}
 
-          {/* ── Panel Modèles Classiques ───────────────────────────────────────── */}
           {showModelPanel && (
             <div className="bg-gray-800/50 rounded-lg p-3 max-h-40 overflow-y-auto">
               <p className="text-[10px] font-semibold text-gray-400 mb-2">📂 Modèles sauvegardés ({savedModels.length})</p>
-              {savedModels.length === 0 ? (
-                <p className="text-xs text-gray-500">Aucun modèle sauvegardé</p>
-              ) : (
+              {savedModels.length === 0 ? <p className="text-xs text-gray-500">Aucun modèle sauvegardé</p> :
                 savedModels.map((model) => (
                   <div key={model.id} className="flex items-center justify-between py-1.5 border-b border-gray-700/50 last:border-0">
                     <div className="flex-1 min-w-0">
@@ -1724,63 +1704,166 @@ export default function KnnRealRoad() {
                       <p className="text-[10px] text-gray-500">Score: {model.score.toFixed(0)} | Distance: {model.distance.toFixed(0)}m</p>
                     </div>
                     <div className="flex gap-1 ml-2">
-                      <button
-                        onClick={() => loadModel(model)}
-                        className="text-[10px] px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded transition-colors"
-                      >
-                        Charger
-                      </button>
-                      <button
-                        onClick={() => deleteModel(model.id)}
-                        className="text-[10px] px-2 py-0.5 bg-red-600 hover:bg-red-500 text-white rounded transition-colors"
-                      >
-                        ×
-                      </button>
+                      <button onClick={() => loadModel(model)} className="text-[10px] px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded transition-colors">Charger</button>
+                      <button onClick={() => deleteModel(model.id)} className="text-[10px] px-2 py-0.5 bg-red-600 hover:bg-red-500 text-white rounded transition-colors">×</button>
                     </div>
                   </div>
                 ))
-              )}
+              }
             </div>
           )}
 
-          {/* ── Panel Modèles KNN ────────────────────────────────────────────── */}
           {showKNNPanel && (
             <div className="bg-gray-800/50 rounded-lg p-3 max-h-48 overflow-y-auto">
               <p className="text-[10px] font-semibold text-gray-400 mb-2">🧠 Modèles KNN ({savedKNNModels.length})</p>
-              {savedKNNModels.length === 0 ? (
-                <p className="text-xs text-gray-500">Aucun modèle KNN. Entraînez d'abord !</p>
-              ) : (
+              {savedKNNModels.length === 0 ? <p className="text-xs text-gray-500">Aucun modèle KNN. Entraînez d'abord !</p> :
                 savedKNNModels.map((model) => (
                   <div key={model.id} className="flex items-center justify-between py-1.5 border-b border-gray-700/50 last:border-0">
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-gray-300 truncate">{model.name}</p>
-                      <p className="text-[10px] text-gray-500">
-                        {model.metadata.totalSamples} samples | Score: {model.metadata.bestScore.toFixed(0)}
-                      </p>
+                      <p className="text-[10px] text-gray-500">{model.metadata.totalSamples} samples | Score: {model.metadata.bestScore.toFixed(0)}</p>
                     </div>
                     <div className="flex gap-1 ml-2">
-                      <button
-                        onClick={() => startInference(model)}
-                        className="text-[10px] px-2 py-0.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded transition-colors"
-                      >
-                        🤖 Utiliser
-                      </button>
-                      <button
-                        onClick={() => deleteKNNModel(model.id)}
-                        className="text-[10px] px-2 py-0.5 bg-red-600 hover:bg-red-500 text-white rounded transition-colors"
-                      >
-                        ×
-                      </button>
+                      <button onClick={() => startInference(model)} className="text-[10px] px-2 py-0.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded transition-colors">🤖 Utiliser</button>
+                      <button onClick={() => deleteKNNModel(model.id)} className="text-[10px] px-2 py-0.5 bg-red-600 hover:bg-red-500 text-white rounded transition-colors">×</button>
                     </div>
                   </div>
                 ))
-              )}
+              }
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════════ */}
+          {/* ═══ PANNEAU ÉDUCATIF KNN ══ */}
+          {/* ═══════════════════════════════════════════════════════════════════ */}
+          {showKnnGuide && (
+            <div className="bg-gradient-to-br from-amber-900/40 to-orange-900/30 rounded-lg p-3 border border-amber-700/50">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-bold text-amber-300 flex items-center gap-1">
+                  📚 Comment fonctionne le KNN ?
+                </p>
+                <button onClick={() => setShowKnnGuide(false)} className="text-amber-400 hover:text-amber-200 text-xs">✕</button>
+              </div>
+
+              {/* Tabs */}
+              <div className="flex gap-1 mb-2 flex-wrap">
+                {[
+                  { id: 'formula' as const, label: '📐 Formule' },
+                  { id: 'steps' as const, label: '🔢 Étapes' },
+                  { id: 'types' as const, label: '⚖️ Types' },
+                  { id: 'tips' as const, label: '💡 Tips' }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveGuideTab(tab.id)}
+                    className={`text-[10px] px-2 py-1 rounded transition-colors ${
+                      activeGuideTab === tab.id
+                        ? 'bg-amber-600 text-white font-bold'
+                        : 'bg-gray-800/50 text-gray-400 hover:bg-gray-700/50'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Contenu des tabs */}
+              <div className="text-[11px] text-amber-100/90 space-y-2 max-h-64 overflow-y-auto">
+                {activeGuideTab === 'formula' && (
+                  <>
+                    <div className="bg-gray-900/60 rounded p-2 border border-amber-700/30">
+                      <p className="text-[10px] text-amber-400 font-bold mb-1">📐 Distance Euclidienne (principale)</p>
+                      <div className="bg-black/40 rounded p-2 font-mono text-center text-xs text-emerald-300">
+                        d(x,y) = √ Σ(xᵢ - yᵢ)²
+                      </div>
+                      <p className="text-[9px] text-gray-400 mt-1 italic">
+                        Pour x=(x₁,x₂,...,xₙ) et y=(y₁,y₂,...,yₙ)
+                      </p>
+                    </div>
+                    <div className="bg-gray-900/60 rounded p-2 border border-amber-700/30">
+                      <p className="text-[10px] text-amber-400 font-bold mb-1">📏 Autres distances possibles</p>
+                      <div className="space-y-1 text-[10px]">
+                        <div className="bg-black/30 rounded px-2 py-1 font-mono text-cyan-300">
+                          Manhattan: d = Σ|x - yᵢ|
+                        </div>
+                        <div className="bg-black/30 rounded px-2 py-1 font-mono text-purple-300">
+                          Minkowski: généralisation
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {activeGuideTab === 'steps' && (
+                  <div className="space-y-2">
+                    {[
+                      { num: '1', icon: '', title: 'Choisir un nombre K', desc: 'Ex: K = 3, 5, 7… (actuel: K=' + kValue + ')' },
+                      { num: '2', icon: '📏', title: 'Calculer la distance', desc: 'Entre le nouveau point et tous les points d\'entraînement' },
+                      { num: '3', icon: '🏆', title: 'Trouver les K plus proches', desc: 'On sélectionne les K points les plus proches' },
+                      { num: '4', icon: '✅', title: 'Décision finale', desc: 'Classe majoritaire (classification) ou moyenne (régression)' }
+                    ].map((step) => (
+                      <div key={step.num} className="flex gap-2 bg-gray-900/60 rounded p-2 border border-amber-700/30">
+                        <div className="w-6 h-6 rounded-full bg-amber-600 flex items-center justify-center text-xs font-bold text-white shrink-0">
+                          {step.num}
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-bold text-amber-200">{step.icon} {step.title}</p>
+                          <p className="text-[10px] text-gray-300">{step.desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {activeGuideTab === 'types' && (
+                  <div className="space-y-2">
+                    <div className="bg-gradient-to-r from-blue-900/40 to-blue-800/20 rounded p-2 border border-blue-700/50">
+                      <p className="text-[11px] font-bold text-blue-300 mb-1">🔹 Classification</p>
+                      <p className="text-[10px] text-blue-100/80 mb-1">On prend la classe majoritaire :</p>
+                      <div className="bg-black/40 rounded p-1.5 text-[10px] font-mono space-y-0.5">
+                        <div>voisin 1 → A</div>
+                        <div>voisin 2 → B</div>
+                        <div>voisin 3 → A</div>
+                        <div className="text-emerald-400 font-bold">➡️ Résultat = A</div>
+                      </div>
+                    </div>
+                    <div className="bg-gradient-to-r from-emerald-900/40 to-emerald-800/20 rounded p-2 border border-emerald-700/50">
+                      <p className="text-[11px] font-bold text-emerald-300 mb-1"> Régression</p>
+                      <p className="text-[10px] text-emerald-100/80 mb-1">On prend la moyenne des valeurs :</p>
+                      <div className="bg-black/40 rounded p-1.5 text-[10px] font-mono text-center">
+                         = (1/K) Σ yᵢ
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeGuideTab === 'tips' && (
+                  <div className="space-y-1.5">
+                    {[
+                      { icon: '✔', color: 'text-emerald-400', text: 'Pas d\'entraînement réel (lazy learning)' },
+                      { icon: '✔', color: 'text-emerald-400', text: 'Sensible au choix de K' },
+                      { icon: '✔', color: 'text-emerald-400', text: 'Sensible à l\'échelle (normalisation importante)' },
+                      { icon: '✔', color: 'text-emerald-400', text: 'Simple mais coûteux pour grands datasets' }
+                    ].map((tip, i) => (
+                      <div key={i} className="flex items-start gap-2 bg-gray-900/60 rounded p-2 border border-amber-700/30">
+                        <span className={`${tip.color} font-bold`}>{tip.icon}</span>
+                        <span className="text-[10px] text-gray-200">{tip.text}</span>
+                      </div>
+                    ))}
+                    <div className="bg-amber-900/40 rounded p-2 border border-amber-600/50 mt-2">
+                      <p className="text-[10px] text-amber-200 font-bold">📌 Résumé simple</p>
+                      <p className="text-[10px] text-amber-100/80 mt-1 italic">
+                        KNN = "Regarde les K voisins les plus proches et décide selon eux"
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
           
           <hr className="border-gray-800" />
           
-          {/* ── Statut ─────────────────────────────────────────────────────────── */}
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2">Statut</p>
             <div className="flex flex-col gap-1.5 text-xs">
@@ -1806,29 +1889,32 @@ export default function KnnRealRoad() {
                 <span className="text-gray-500">Couverture</span>
                 <span className="font-mono text-violet-400">{carRef.current?.coverage || 0}</span>
               </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Risque collision</span>
+                <span className={`font-mono font-bold ${collisionRisk > 0.6 ? 'text-red-400 animate-pulse' : collisionRisk > 0.35 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                  {(collisionRisk * 100).toFixed(0)}%
+                </span>
+              </div>
+              <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-200" style={{ 
+                  width: `${collisionRisk * 100}%`,
+                  backgroundColor: collisionRisk > 0.6 ? '#ef4444' : collisionRisk > 0.35 ? '#f59e0b' : '#22c55e'
+                }} />
+              </div>
+              <div className="text-[9px] text-gray-400 italic"> {situation}</div>
               {mode === 'inference' && (
                 <>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Confiance KNN</span>
-                    <span className="font-mono text-cyan-400">{(inferenceConfidence * 100).toFixed(0)}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Contexte</span>
-                    <span className="font-mono text-purple-400">{inferenceContext}</span>
-                  </div>
+                  <div className="flex justify-between"><span className="text-gray-500">Confiance KNN</span><span className="font-mono text-cyan-400">{(inferenceConfidence * 100).toFixed(0)}%</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Contexte</span><span className="font-mono text-purple-400">{inferenceContext}</span></div>
                 </>
               )}
               {mode === 'training' && (
-                <div className="flex justify-between">
-                  <span className="text-gray-500">Échantillons</span>
-                  <span className="font-mono text-purple-400">{trainingSamples}</span>
-                </div>
+                <div className="flex justify-between"><span className="text-gray-500">Échantillons</span><span className="font-mono text-purple-400">{trainingSamples}</span></div>
               )}
             </div>
           </div>
           <hr className="border-gray-800" />
           
-          {/* ── K Value ────────────────────────────────────────────────────────── */}
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2">K = <span className="text-blue-400 font-mono font-bold">{kValue}</span></p>
             <div className="flex items-center gap-3">
@@ -1839,67 +1925,58 @@ export default function KnnRealRoad() {
           </div>
           <hr className="border-gray-800" />
           
-          {/* ── Capteurs ───────────────────────────────────────────────────────── */}
           <div>
             <div className="flex justify-between items-center mb-2">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500">Capteurs</p>
               <button onClick={toggleSensors} className={`text-[10px] px-2 py-0.5 rounded ${showSensors ? 'bg-blue-600/30 text-blue-400' : 'bg-gray-700/30 text-gray-400'} border ${showSensors ? 'border-blue-600/30' : 'border-gray-700/30'} transition-colors`}>
-                {showSensors ? '📡 ON' : '📡 OFF'}
+                {showSensors ? ' ON' : '📡 OFF'}
               </button>
             </div>
             <div className="bg-gray-800/50 rounded-lg p-3 space-y-2">
-              {sensors.length > 0 ? (
-                <>
-                  {sensorLabels.map((label, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <div className="w-16 text-[10px] text-gray-400 truncate">{label}</div>
-                      <div className="flex-1 h-2.5 bg-gray-700 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full rounded-full transition-all duration-150" 
-                          style={{ 
-                            width: `${(sensors[i] || 0) * 100}%`,
-                            backgroundColor: (sensors[i] || 0) > 0.6 ? '#22c55e' : (sensors[i] || 0) > 0.3 ? '#f59e0b' : '#ef4444'
-                          }} 
-                        />
-                      </div>
-                      <div className="w-12 text-right font-mono text-[10px] text-gray-300">
-                        {((sensors[i] || 0) * 100).toFixed(0)}%
-                      </div>
-                    </div>
-                  ))}
-                </>
-              ) : (
-                <div className="text-xs text-gray-500 text-center py-4">Aucune donnée capteur</div>
-              )}
+              {sensors.length > 0 ? sensors.map((s, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="w-16 text-[10px] text-gray-400 truncate">{sensorLabels[i]}</div>
+                  <div className="flex-1 h-2.5 bg-gray-700 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-150" style={{ 
+                      width: `${(s || 0) * 100}%`,
+                      backgroundColor: (s || 0) > 0.6 ? '#22c55e' : (s || 0) > 0.3 ? '#f59e0b' : '#ef4444'
+                    }} />
+                  </div>
+                  <div className="w-12 text-right font-mono text-[10px] text-gray-300">{((s || 0) * 100).toFixed(0)}%</div>
+                </div>
+              )) : <div className="text-xs text-gray-500 text-center py-4">Aucune donnée capteur</div>}
             </div>
           </div>
           
           <hr className="border-gray-800" />
           
-          {/* ── Réseau ─────────────────────────────────────────────────────────── */}
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2">Réseau</p>
             <div className="flex flex-col gap-1.5 text-xs">
-              <div className="flex justify-between"><span className="text-gray-500">Routes</span><span className="font-mono text-white font-bold">{routesCount}</span></div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Routes</span>
+                <span className="font-mono text-white font-bold flex items-center gap-1">
+                  {routesCount}
+                  {apiRoutesLoaded && <span className="text-[8px] bg-emerald-600 px-1 rounded">API</span>}
+                </span>
+              </div>
               <div className="flex justify-between"><span className="text-gray-500">Intersections</span><span className="font-mono text-violet-400 font-bold">{intersectionsCount}</span></div>
             </div>
           </div>
           <hr className="border-gray-800" />
           
-          {/* ── Code de la Route ───────────────────────────────────────────────── */}
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2">Code de la Route</p>
             <div className={`rounded-lg px-3 py-2 text-xs font-medium border ${roadCode.conforme ? 'bg-emerald-900/40 text-emerald-300 border-emerald-800' : 'bg-red-900/40 text-red-300 border-red-800'}`}>
               <div className="flex items-center gap-2">
                 <span className={`w-2 h-2 rounded-full shrink-0 ${roadCode.conforme ? 'bg-emerald-400' : 'bg-red-400 animate-pulse'}`} />
-                {roadCode.conforme ? '✅ Conforme' : '❌ Non conforme'}
+                {roadCode.conforme ? '✅ Conforme' : ' Non conforme'}
               </div>
               <p className="mt-1 text-[10px] opacity-70">{roadCode.raison}</p>
             </div>
           </div>
           <hr className="border-gray-800" />
           
-          {/* ── Vitesse ────────────────────────────────────────────────────────── */}
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-500 mb-2">Vitesse : <span className="text-white font-mono text-sm">{speedKmh} km/h</span></p>
             <div className="h-3 bg-gray-800 rounded-full overflow-hidden">
@@ -1909,9 +1986,7 @@ export default function KnnRealRoad() {
               }} />
             </div>
             <div className="flex justify-between text-[9px] text-gray-500 mt-0.5">
-              <span>0</span>
-              <span>{SPEED_LIMIT_KMH} km/h</span>
-              <span>{(MAX_SPEED * 3.6).toFixed(0)} max</span>
+              <span>0</span><span>{SPEED_LIMIT_KMH} km/h</span><span>{(MAX_SPEED * 3.6).toFixed(0)} max</span>
             </div>
           </div>
         </aside>
