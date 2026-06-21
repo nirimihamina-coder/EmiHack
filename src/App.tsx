@@ -21,6 +21,10 @@ import SettingsNotifications from './pages/settings/SettingsNotifications';
 import ProductPage from './pages/Product/Product';
 import SettingsFaceScan from './pages/settings/SettingsFaceScan';
 import CartePage from './pages/carte/Carte';
+import DeviationPage from './pages/deviation/DeviationPage';
+import MapCollector from './pages/deviation/MapCollector';
+import FokontanyPage from './pages/fokontany/FokontanyPage';
+import Simulation from './pages/simulation/Simulation';
 
 function App() {
   return (
@@ -53,6 +57,10 @@ function App() {
         </Route>
         <Route path="crud" element={<ProductPage />} />
         <Route path="carte" element={<CartePage />} />
+        <Route path="deviation" element={<DeviationPage />} />
+        <Route path="mapcollector" element={<MapCollector />} />
+        <Route path="fokontany" element={<FokontanyPage />} />
+        <Route path="simulation" element={<Simulation />} />
       </Route>
     </Routes>
   );
