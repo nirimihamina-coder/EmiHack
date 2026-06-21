@@ -7,8 +7,6 @@ import { useModal } from '../../context/ModalContext';
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/dashboard/settings', icon: Settings, label: 'Paramètres' },
-  { to: '/dashboard/message', icon: MailIcon, label: 'Messages' },
-  { to: '/dashboard/crud', icon: PresentationIcon, label: 'C.R.U.D' },
   { to: '/dashboard/carte', icon: MapIcon, label: 'Cartes' },
   { to: '/dashboard/deviation', icon: Route, label: 'Déviation' },
   { to: '/dashboard/fokontany', icon: Globe, label: 'Fokontany' },

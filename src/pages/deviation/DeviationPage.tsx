@@ -13,7 +13,10 @@ import {
 import { transportModes } from '../../data/routesData';
 import boundaryData from '../../data/fianarantsoa-boundary.json';
 import { useRoadsStore } from '../../stores/roads';
+import { useReportsStore } from '../../stores/reports';
 import type { GeoJSONCollection } from '../../interface/Map';
+import type { Report } from '../../services/reportService';
+import { mapService } from '../../services/mapService';
 
 type TransportMode = (typeof transportModes)[number]['id'];
 type TabKey = 'form' | 'results';
@@ -28,6 +31,8 @@ interface Itinerary {
   color: string;
   weight: number;
   summary?: string;
+  report?: Report;
+  isAvoidance?: boolean;
 }
 
 interface ORSFeature {
@@ -242,29 +247,179 @@ function drawAllRoutes(layerGroup: L.LayerGroup, routes: DisplayRoute[]) {
 }
 
 // ============================================================
+// 🔑 Signalements sur la carte — avatar + popup
+// ============================================================
+const DEFAULT_REPORT_AVATAR = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#cbd5e1"/><text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-size="40" fill="#64748b">?</text></svg>');
+
+function getSeverityColor(severity: string): string {
+  const s = severity.toLowerCase();
+  if (s === 'high' || s === 'critical') return '#dc2626';
+  if (s === 'medium') return '#f59e0b';
+  return '#22c55e';
+}
+
+function makeReportIcon(report: Report): L.DivIcon {
+  const avatar = report.reporter?.avatar || DEFAULT_REPORT_AVATAR;
+  const borderColor = getSeverityColor(report.severity);
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:36px;height:36px;border-radius:50%;border:3px solid ${borderColor};overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.3);background:white;display:flex;align-items:center;justify-content:center">
+      <img src="${avatar}" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.style.display='none'" />
+    </div>`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+  });
+}
+
+function makeReportPopup(report: Report): string {
+  const sevColor = getSeverityColor(report.severity);
+  const reporterName = report.reporter ? `${report.reporter.firstName} ${report.reporter.lastName}` : 'Anonyme';
+  const popupWidth = Math.max(80, Math.min(140, window.innerWidth - 20));
+  return `<div style="min-width:${popupWidth}px;font-family:sans-serif">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+      <img src="${report.reporter?.avatar || DEFAULT_REPORT_AVATAR}" style="width:36px;height:36px;border-radius:50%;border:2px solid ${sevColor};object-fit:cover" onerror="this.style.display='none'" />
+      <div>
+        <div style="font-weight:700;font-size:13px;color:#1e293b">${reporterName}</div>
+        <div style="font-size:11px;color:#64748b">${report.type}</div>
+      </div>
+    </div>
+    <div style="margin-bottom:8px">
+      <span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:600;background:${sevColor};color:white">${report.severity}</span>
+      <span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:500;background:#f1f5f9;color:#475569;margin-left:6px">${report.status}</span>
+    </div>
+    <p style="font-size:12px;color:#334155;margin:0 0 6px">${report.description}</p>
+    ${report.fokontanyName ? `<div style="font-size:11px;color:#6366f1;margin-bottom:4px">📍 ${report.fokontanyName}</div>` : ''}
+    ${report.lanesBlocked > 0 ? `<div style="font-size:11px;color:#dc2626;margin-bottom:4px">🚧 ${report.lanesBlocked} voie(s) bloquée(s)</div>` : ''}
+    <div style="font-size:10px;color:#94a3b8;margin-top:6px">${new Date(report.createdAt).toLocaleString('fr-FR')}</div>
+  </div>`;
+}
+
+function drawReports(layerGroup: L.LayerGroup, reports: Report[]) {
+  layerGroup.clearLayers();
+  reports.forEach((report) => {
+    if (report.lat == null || report.lon == null) return;
+    L.marker([report.lat, report.lon], { icon: makeReportIcon(report) })
+      .addTo(layerGroup)
+      .bindPopup(makeReportPopup(report));
+  });
+}
+
+// ============================================================
+// 🔑 Détection de signalement sur une route
+// ============================================================
+function pointToSegmentDist(lat: number, lng: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) {
+    const dlat = lat - ax;
+    const dlng = lng - ay;
+    return Math.sqrt(dlat * dlat + dlng * dlng) * 111320;
+  }
+  let t = ((lat - ax) * dx + (lng - ay) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  const px = ax + t * dx;
+  const py = ay + t * dy;
+  const dlat = lat - px;
+  const dlng = lng - py;
+  return Math.sqrt(dlat * dlat + dlng * dlng) * 111320;
+}
+
+function checkRoutePassesReport(
+  polyline: [number, number][],
+  report: Report,
+  thresholdMeters = 50
+): boolean {
+  for (let i = 1; i < polyline.length; i++) {
+    const dist = pointToSegmentDist(
+      report.lat, report.lon,
+      polyline[i - 1][0], polyline[i - 1][1],
+      polyline[i][0], polyline[i][1]
+    );
+    if (dist < thresholdMeters) return true;
+  }
+  return false;
+}
+
+function findBlockingReports(
+  polyline: [number, number][],
+  reports: Report[],
+  thresholdMeters = 50
+): Report[] {
+  return reports.filter((r) => checkRoutePassesReport(polyline, r, thresholdMeters));
+}
+
+function buildAvoidPolygon(lat: number, lon: number, sizeMeters = 150): number[][] {
+  const latDelta = sizeMeters / 111320;
+  const lonDelta = sizeMeters / (111320 * Math.cos(lat * Math.PI / 180));
+  return [
+    [lon - lonDelta, lat - latDelta],
+    [lon + lonDelta, lat - latDelta],
+    [lon + lonDelta, lat + latDelta],
+    [lon - lonDelta, lat + latDelta],
+    [lon - lonDelta, lat - latDelta],
+  ];
+}
+
+// ============================================================
 // 🔑 Appel à l'API OpenRouteService
 // ============================================================
 const ORS_API_KEY = import.meta.env.VITE_ORS_API_KEY as string || '';
 
-async function fetchORSItineraries(
-  pointA: [number, number],
-  pointB: [number, number],
-  profile: string
-): Promise<{ routes: Itinerary[]; error?: string }> {
-  if (!ORS_API_KEY) {
-    return { routes: [], error: 'Clé API OpenRouteService manquante. Définissez VITE_ORS_API_KEY dans .env' };
-  }
-
+function orsFetch(body: Record<string, unknown>): Promise<Response> {
   const profileMap: Record<string, string> = {
     voiture: 'driving-car',
     bus: 'driving-hgv',
     moto: 'driving-car',
     velo: 'cycling-regular'
   };
-  const orsProfile = profileMap[profile] || 'driving-car';
+  const orsProfile = (profileMap as any)[body.profile as string] || 'driving-car';
+  delete body.profile;
+  return fetch(`https://api.openrouteservice.org/v2/directions/${orsProfile}/geojson`, {
+    method: 'POST',
+    headers: {
+      'Authorization': ORS_API_KEY,
+      'Content-Type': 'application/json; charset=utf-8',
+      'Accept': 'application/json, application/geo+json'
+    },
+    body: JSON.stringify(body)
+  });
+}
 
-  // OpenRouteService prend [lon, lat]
-  const body = {
+function parseORSResponse(data: ORSResponse): Omit<Itinerary, 'report' | 'isAvoidance'>[] {
+  if (!data.features || data.features.length === 0) return [];
+  const colors = ['#2563eb', '#e67e22', '#8e44ad', '#27ae60', '#dc2626'];
+  return data.features.map((feature, idx) => {
+    const coords = feature.geometry.coordinates;
+    const polyline: [number, number][] = coords.map((c) => [c[1], c[0]] as [number, number]);
+    const segments = feature.properties.segments || [];
+    const totalDistance = segments.reduce((sum, s) => sum + s.distance, 0);
+    const totalDuration = segments.reduce((sum, s) => sum + s.duration, 0);
+    const labels = ['Itinéraire principal', 'Variante 1', 'Variante 2', 'Variante 3', 'Variante 4'];
+    return {
+      id: `ors-${idx}`,
+      name: labels[idx] || `Variante ${idx}`,
+      polyline,
+      distance: totalDistance || feature.properties.summary?.distance || 0,
+      duration: totalDuration || feature.properties.summary?.duration || 0,
+      color: colors[idx % colors.length],
+      weight: idx === 0 ? 6 : 4,
+    };
+  });
+}
+
+async function fetchORSItineraries(
+  pointA: [number, number],
+  pointB: [number, number],
+  profile: string,
+  reports?: Report[]
+): Promise<{ routes: Itinerary[]; error?: string }> {
+  if (!ORS_API_KEY) {
+    return { routes: [], error: 'Clé API OpenRouteService manquante. Définissez VITE_ORS_API_KEY dans .env' };
+  }
+
+  const body: Record<string, unknown> = {
+    profile,
     coordinates: [
       [pointA[1], pointA[0]],
       [pointB[1], pointB[0]]
@@ -277,47 +432,103 @@ async function fetchORSItineraries(
   };
 
   try {
-    const res = await fetch(`https://api.openrouteservice.org/v2/directions/${orsProfile}/geojson`, {
-      method: 'POST',
-      headers: {
-        'Authorization': ORS_API_KEY,
-        'Content-Type': 'application/json; charset=utf-8',
-        'Accept': 'application/json, application/geo+json'
-      },
-      body: JSON.stringify(body)
-    });
-
+    const res = await orsFetch(body);
     if (!res.ok) {
-      const text = await res.text();
+      const text = await res.text().catch(() => '');
       return { routes: [], error: `ORS API error ${res.status}: ${text}` };
     }
 
     const data: ORSResponse = await res.json();
-    if (!data.features || data.features.length === 0) {
+    const baseRoutes = parseORSResponse(data);
+
+    if (baseRoutes.length === 0) {
       return { routes: [], error: 'Aucun itinéraire trouvé' };
     }
 
-    const colors = ['#2563eb', '#e67e22', '#8e44ad', '#27ae60', '#dc2626'];
-    const routes: Itinerary[] = data.features.map((feature, idx) => {
-      const coords = feature.geometry.coordinates;
-      const polyline: [number, number][] = coords.map((c) => [c[1], c[0]] as [number, number]);
+    if (!reports || reports.length === 0) {
+      return { routes: baseRoutes };
+    }
 
-      const segments = feature.properties.segments || [];
-      const totalDistance = segments.reduce((sum, s) => sum + s.distance, 0);
-      const totalDuration = segments.reduce((sum, s) => sum + s.duration, 0);
+    const routes: Itinerary[] = [];
+    const severeReports = reports.filter((r) => r.lanesBlocked > 0);
 
-      const labels = ['Itinéraire principal', 'Variante 1', 'Variante 2', 'Variante 3', 'Variante 4'];
+    // Si aucun report bloquant, retourner les routes brutes
+    if (severeReports.length === 0) {
+      return { routes: baseRoutes };
+    }
 
-      return {
-        id: `ors-${idx}`,
-        name: labels[idx] || `Variante ${idx}`,
-        polyline,
-        distance: totalDistance || feature.properties.summary?.distance || 0,
-        duration: totalDuration || feature.properties.summary?.duration || 0,
-        color: colors[idx % colors.length],
-        weight: idx === 0 ? 6 : 4
-      };
-    });
+    // Marquer les routes impactées et construire les polygones d'évitement
+    const avoidPolygons: number[][][] = [];
+    for (const route of baseRoutes) {
+      const blockingReports = findBlockingReports(route.polyline, severeReports);
+      if (blockingReports.length === 0) {
+        routes.push(route);
+      } else {
+        const primary = blockingReports[0];
+        routes.push({ ...route, report: primary });
+        for (const r of blockingReports) {
+          avoidPolygons.push(buildAvoidPolygon(r.lat, r.lon));
+        }
+      }
+    }
+
+    // Trouver obligatoirement une déviation
+    if (avoidPolygons.length > 0) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const size = 150 * (attempt + 1);
+        const expandedPolygons = attempt === 0 ? avoidPolygons : avoidPolygons.map((p) => {
+          // Reconstruire avec une taille croissante
+          const centerLat = p.reduce((s, c) => s + c[1], 0) / p.length;
+          const centerLon = p.reduce((s, c) => s + c[0], 0) / p.length;
+          return buildAvoidPolygon(centerLat, centerLon, size);
+        });
+
+        try {
+          const avoidBody: Record<string, unknown> = {
+            profile,
+            coordinates: [
+              [pointA[1], pointA[0]],
+              [pointB[1], pointB[0]]
+            ],
+            format: 'geojson',
+            alternative_routes: attempt > 0 ? undefined : { share_factor: 0.6, target_count: 2 },
+            options: {
+              avoid_polygons: {
+                type: 'MultiPolygon',
+                coordinates: [expandedPolygons]
+              }
+            }
+          };
+
+          const avoidRes = await orsFetch(avoidBody);
+          if (!avoidRes.ok) continue;
+
+          const avoidData: ORSResponse = await avoidRes.json();
+          const avoidRoutes = parseORSResponse(avoidData);
+
+          // Ne garder que les déviations qui évitent vraiment les reports bloquants
+          const validRoutes = avoidRoutes.filter((r) => {
+            const stillBlocked = findBlockingReports(r.polyline, severeReports);
+            return stillBlocked.length === 0;
+          });
+
+          if (validRoutes.length > 0) {
+            validRoutes.forEach((r, idx) => {
+              routes.push({
+                ...r,
+                name: `Déviation ${idx + 1}`,
+                color: '#06b6d4',
+                weight: 5,
+                isAvoidance: true,
+              });
+            });
+            break; // Sortir dès qu'on a trouvé des déviations valides
+          }
+        } catch {
+          continue;
+        }
+      }
+    }
 
     return { routes };
   } catch (err: unknown) {
@@ -334,20 +545,32 @@ function drawItineraries(layerGroup: L.LayerGroup, routes: Itinerary[], selected
 
   routes.forEach((route) => {
     const isSelected = route.id === selectedId;
+    const lineColor = route.report ? '#dc2626' : route.color;
+    const dash = route.report ? '10, 6' : isSelected ? undefined : '8, 6';
     L.polyline(route.polyline, {
-      color: route.color,
+      color: lineColor,
       weight: isSelected ? route.weight + 2 : route.weight,
       opacity: isSelected ? 1 : 0.7,
       lineCap: 'round',
       lineJoin: 'round',
-      dashArray: isSelected ? undefined : '8, 6'
+      dashArray: dash
     })
       .addTo(layerGroup)
-      .bindPopup(
-        `<strong>${route.name}</strong><br/>` +
-          `${(route.distance / 1000).toFixed(1)} km • ${Math.round(route.duration / 60)} min`
-      );
+      .bindPopup(makeRoutePopup(route));
   });
+}
+
+function makeRoutePopup(route: Itinerary): string {
+  if (!route.report) {
+    return `<strong>${route.name}</strong><br/>${(route.distance / 1000).toFixed(1)} km • ${Math.round(route.duration / 60)} min${route.isAvoidance ? '<br/><span style="font-size:11px;color:#0891b2">Évite un signalement</span>' : ''}`;
+  }
+  const r = route.report;
+  const sevColor = r.severity === 'high' || r.severity === 'critical' ? '#dc2626' : r.severity === 'medium' ? '#f59e0b' : '#22c55e';
+  return `<strong style="color:#dc2626">⛔ ${route.name} — Impacté</strong><br/>
+    <span style="display:inline-block;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:600;background:${sevColor};color:white;margin:4px 0">${r.severity}</span>
+    <span style="font-size:11px;color:#64748b;margin-left:4px">${r.type}</span>
+    ${r.lanesBlocked > 0 ? `<br/>🚧 <strong>${r.lanesBlocked}</strong> voie(s) bloquée(s)` : ''}
+    <br/><span style="font-size:11px;color:#475569">${r.description}</span>`;
 }
 
 // ============================================================
@@ -367,6 +590,8 @@ export default function DeviationPage() {
   const [selectingPoint, setSelectingPoint] = useState<SelectingPoint>(null);
   const [locating, setLocating] = useState(false);
   const [orsError, setOrsError] = useState<string | null>(null);
+  const [fokontanyA, setFokontanyA] = useState<string | null>(null);
+  const [fokontanyB, setFokontanyB] = useState<string | null>(null);
 
   const mapElRef = useRef<HTMLDivElement>(null);
   const formMapElRef = useRef<HTMLDivElement>(null);
@@ -374,15 +599,19 @@ export default function DeviationPage() {
   const formMapRef = useRef<L.Map | null>(null);
   const itinerariesLayerRef = useRef<L.LayerGroup | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
+  const reportsLayerRef = useRef<L.LayerGroup | null>(null);
   const boundaryLayerRef = useRef<L.LayerGroup | null>(null);
   const allRoutesLayerRef = useRef<L.LayerGroup | null>(null);
   const formBoundaryLayerRef = useRef<L.LayerGroup | null>(null);
   const formRoutesLayerRef = useRef<L.LayerGroup | null>(null);
   const formMarkersRef = useRef<L.LayerGroup | null>(null);
+  const formReportsLayerRef = useRef<L.LayerGroup | null>(null);
   const markerARef = useRef<L.Marker | null>(null);
   const markerBRef = useRef<L.Marker | null>(null);
   const selectingPointRef = useRef<SelectingPoint>(null);
   const { geoJSON, loading: storeLoading, load: loadRoutes } = useRoadsStore();
+  const { reports, load: loadReports } = useReportsStore();
+  const DEFAULT_AVATAR = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#cbd5e1"/><text x="50" y="50" text-anchor="middle" dominant-baseline="central" font-size="40" fill="#64748b">?</text></svg>');
 
   useEffect(() => {
     selectingPointRef.current = selectingPoint;
@@ -390,7 +619,8 @@ export default function DeviationPage() {
 
   useEffect(() => {
     loadRoutes();
-  }, [loadRoutes]);
+    loadReports();
+  }, [loadRoutes, loadReports]);
 
   // Désactiver le bouton si ORS_API_KEY est absent
   const canSearch = pointA.trim().length > 0 && pointB.trim().length > 0 && !!ORS_API_KEY;
@@ -413,6 +643,20 @@ export default function DeviationPage() {
       return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
     } catch {
       return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+    }
+  };
+
+  const queryFokontany = async (lat: number, lng: number): Promise<string | null> => {
+    try {
+      const query = `[out:json][timeout:25];
+is_in(${lat},${lng})->.a;
+(relation(pivot.a)["boundary"="administrative"]["admin_level"="10"];);
+out geom;`;
+      const data = await mapService.overpassQuery(query);
+      const el = data.elements?.[0];
+      return el?.tags?.name || null;
+    } catch {
+      return null;
     }
   };
 
@@ -467,6 +711,11 @@ export default function DeviationPage() {
         const { latitude, longitude } = position.coords;
         await setPointWithGeocode('A', latitude, longitude);
         placeMarkerOnFormMap('A', latitude, longitude);
+        const name = await queryFokontany(latitude, longitude);
+        setFokontanyA(name);
+        if (markerARef.current && name) {
+          markerARef.current.bindPopup(`<strong>${name}</strong>`).openPopup();
+        }
         if (formMapRef.current) {
           formMapRef.current.setView([latitude, longitude], 16);
         }
@@ -498,7 +747,7 @@ export default function DeviationPage() {
     setItineraries([]);
     setSelectedItineraryId(null);
 
-    const { routes, error } = await fetchORSItineraries(pointACoord, pointBCoord, transport);
+    const { routes, error } = await fetchORSItineraries(pointACoord, pointBCoord, transport, reports);
 
     if (error) {
       setOrsError(error);
@@ -532,11 +781,13 @@ export default function DeviationPage() {
     formMarkersRef.current = L.layerGroup().addTo(map);
     formBoundaryLayerRef.current = L.layerGroup().addTo(map);
     formRoutesLayerRef.current = L.layerGroup().addTo(map);
+    formReportsLayerRef.current = L.layerGroup().addTo(map);
 
     drawBoundary(formBoundaryLayerRef.current, boundaryData as OverpassResponse);
     if (geoJSON) {
       drawAllRoutes(formRoutesLayerRef.current, geoJSONToDisplayRoutes(geoJSON));
     }
+    drawReports(formReportsLayerRef.current, reports);
 
     map.on('click', async (e: L.LeafletMouseEvent) => {
       const currentSelecting = selectingPointRef.current;
@@ -544,6 +795,18 @@ export default function DeviationPage() {
       const { lat, lng } = e.latlng;
       placeMarkerOnFormMap(currentSelecting, lat, lng);
       await setPointWithGeocode(currentSelecting, lat, lng);
+      const name = await queryFokontany(lat, lng);
+      if (currentSelecting === 'A') {
+        setFokontanyA(name);
+        if (markerARef.current && name) {
+          markerARef.current.bindPopup(`<strong>${name}</strong>`).openPopup();
+        }
+      } else {
+        setFokontanyB(name);
+        if (markerBRef.current && name) {
+          markerBRef.current.bindPopup(`<strong>${name}</strong>`).openPopup();
+        }
+      }
       setSelectingPoint(null);
     });
 
@@ -553,6 +816,7 @@ export default function DeviationPage() {
       formMarkersRef.current = null;
       formBoundaryLayerRef.current = null;
       formRoutesLayerRef.current = null;
+      formReportsLayerRef.current = null;
       markerARef.current = null;
       markerBRef.current = null;
     };
@@ -576,15 +840,18 @@ export default function DeviationPage() {
     allRoutesLayerRef.current = L.layerGroup().addTo(map);
     itinerariesLayerRef.current = L.layerGroup().addTo(map);
     markersLayerRef.current = L.layerGroup().addTo(map);
+    reportsLayerRef.current = L.layerGroup().addTo(map);
 
     drawBoundary(boundaryLayerRef.current, boundaryData as OverpassResponse);
     if (geoJSON) {
       drawAllRoutes(allRoutesLayerRef.current, geoJSONToDisplayRoutes(geoJSON));
     }
+    drawReports(reportsLayerRef.current, reports);
 
     return () => {
       map.remove();
       mapRef.current = null;
+      reportsLayerRef.current = null;
     };
   }, [geoJSON]);
 
@@ -653,6 +920,16 @@ export default function DeviationPage() {
       mapRef.current.fitBounds(bounds);
     }
   }, [showMap, itineraries, selectedItineraryId, pointACoord, pointBCoord, pointA, pointB]);
+
+  // Redessiner les signalements quand ils changent
+  useEffect(() => {
+    if (formReportsLayerRef.current) {
+      drawReports(formReportsLayerRef.current, reports);
+    }
+    if (reportsLayerRef.current) {
+      drawReports(reportsLayerRef.current, reports);
+    }
+  }, [reports]);
 
   // ============================================================
   // Rendu
@@ -779,6 +1056,11 @@ export default function DeviationPage() {
                     </button>
                   </div>
                 </div>
+                {fokontanyA && (
+                  <div className="flex items-center gap-1 text-[11px] text-indigo-600 mt-1 ml-0.5">
+                    <MapPin size={10} /> Fokontany : {fokontanyA}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -805,6 +1087,11 @@ export default function DeviationPage() {
                     Choisir sur la carte
                   </button>
                 </div>
+                {fokontanyB && (
+                  <div className="flex items-center gap-1 text-[11px] text-indigo-600 mt-1 ml-0.5">
+                    <MapPin size={10} /> Fokontany : {fokontanyB}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -914,23 +1201,48 @@ export default function DeviationPage() {
                       }}
                       className={`rounded-lg border p-3 cursor-pointer transition-all duration-200 hover:shadow-sm ${
                         isSelected ? 'ring-2 ring-indigo-400 border-indigo-300' : 'border-gray-200 hover:border-gray-300'
-                      }`}
+                      } ${route.report ? 'bg-red-50 border-red-200' : route.isAvoidance ? 'bg-cyan-50 border-cyan-200' : ''}`}
                     >
                       <div className="flex items-start gap-2.5">
                         <div
                           className="w-1 self-stretch rounded-full shrink-0 mt-0.5"
-                          style={{ backgroundColor: route.color }}
+                          style={{ backgroundColor: route.report ? '#dc2626' : route.color }}
                         />
                         <div className="flex-1 min-w-0">
                           <h4 className="text-xs font-semibold text-gray-900">{route.name}</h4>
-                          <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-1 mb-1.5">
-                            <span className="flex items-center gap-1">
-                              <Navigation size={11} /> {(route.distance / 1000).toFixed(1)} km
+                          {route.report ? (
+                            <div className="mt-1.5 space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold text-white ${
+                                  route.report.severity === 'high' || route.report.severity === 'critical' ? 'bg-red-500' :
+                                  route.report.severity === 'medium' ? 'bg-orange-500' : 'bg-green-500'
+                                }`}>
+                                  {route.report.severity}
+                                </span>
+                                <span className="text-[11px] text-gray-500">{route.report.type}</span>
+                              </div>
+                              {route.report.lanesBlocked > 0 && (
+                                <p className="text-[11px] text-red-600 font-medium">
+                                  🚧 {route.report.lanesBlocked} voie(s) bloquée(s)
+                                </p>
+                              )}
+                              <p className="text-[11px] text-gray-600 line-clamp-2">{route.report.description}</p>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-1 mb-1.5">
+                              <span className="flex items-center gap-1">
+                                <Navigation size={11} /> {(route.distance / 1000).toFixed(1)} km
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Clock size={11} /> {Math.round(route.duration / 60)} min
+                              </span>
+                            </div>
+                          )}
+                          {route.isAvoidance && !route.report && (
+                            <span className="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-cyan-100 text-cyan-700">
+                              Évite un signalement
                             </span>
-                            <span className="flex items-center gap-1">
-                              <Clock size={11} /> {Math.round(route.duration / 60)} min
-                            </span>
-                          </div>
+                          )}
                         </div>
                       </div>
                     </div>

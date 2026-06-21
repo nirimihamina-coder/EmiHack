@@ -15,6 +15,9 @@ export interface RouteData {
   coordinates: [number, number][]; // [lat, lng]
   distance: number;
   duration: number;
+  lanes: number;
+  speedLimit: number;
+  direction: string;
 }
 
 interface GeoJSONFeature {
@@ -40,7 +43,7 @@ const MapCollector: React.FC = () => {
   const [routeType, setRouteType] = useState('RN 7');
 
   const API_KEY = '5b3ce3597851110001cf6248f7be3c52a112485db4cb2a9e741b567b';
-  const API_URL = 'https://emihack.onrender.com/api';
+  const API_URL = 'https://emihack.onrender.com/routes';
 
   // Initialisation de la carte
   useEffect(() => {
@@ -133,7 +136,10 @@ const MapCollector: React.FC = () => {
         type: routeType,
         coordinates: formattedCoordinates,
         distance: Math.round(totalDistance * 10) / 10, // Arrondi à 1 décimale
-        duration: durationInMinutes
+        duration: durationInMinutes,
+  lanes: 2,
+  speedLimit: 50,
+  direction: "both"
       };
     } catch (error) {
       console.error('Erreur lors de l\'extraction des données:', error);
