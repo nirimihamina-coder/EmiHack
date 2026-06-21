@@ -22,11 +22,11 @@ type TileKey = keyof typeof TILES;
 
 const DEFAULT_STYLES: Record<string, L.PathOptions> = {
   adminBoundary: { color: '#1d4ed8', weight: 2, fillColor: '#3b82f6', fillOpacity: 0.08 },
-  roadPrimary: { color: '#f97316', weight: 3.5, fillOpacity: 0, lineCap: 'round', lineJoin: 'round' },
-  roadSecondary: { color: '#eab308', weight: 2.8, fillOpacity: 0, lineCap: 'round', lineJoin: 'round' },
-  roadTertiary: { color: '#334155', weight: 2.5, fillOpacity: 0, lineCap: 'round', lineJoin: 'round' },
-  roadResidential: { color: '#475569', weight: 2, fillOpacity: 0, lineCap: 'round', lineJoin: 'round' },
-  selected: { color: '#10b981', weight: 5, fillOpacity: 0, lineCap: 'round', lineJoin: 'round' },
+  roadPrimary: { color: '#2563eb', weight: 3, fillOpacity: 0, lineCap: 'round', lineJoin: 'round' },
+  roadSecondary: { color: '#16a34a', weight: 3, fillOpacity: 0, lineCap: 'round', lineJoin: 'round' },
+  roadTertiary: { color: '#f97316', weight: 3, fillOpacity: 0, lineCap: 'round', lineJoin: 'round' },
+  roadResidential: { color: '#7c3aed', weight: 3, fillOpacity: 0, lineCap: 'round', lineJoin: 'round' },
+  selected: { color: '#0f172a', weight: 4, fillOpacity: 0, lineCap: 'round', lineJoin: 'round' },
 };
 
 function getDefaultStyleForKey(key: string): L.PathOptions {
