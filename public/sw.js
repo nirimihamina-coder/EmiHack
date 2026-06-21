@@ -1,8 +1,8 @@
 const CACHE_NAME = 'app-static-v1';
 const API_CACHE = 'api-posts-v1';
-const API_BASE = import.meta.env.VITE_APP_API_BASE_URL;
+const API_BASE = 'https://backend-x5i6.onrender.com';
 
-const STATIC_ASSETS = ['/', '/index.html', '/manifest.json', '/favicon.ico'];
+const STATIC_ASSETS = ['/', '/index.html', '/favicon.svg'];
 
 // ── Installation : mise en cache des assets statiques ──────────────────────
 self.addEventListener('install', (event) => {
