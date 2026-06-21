@@ -24,10 +24,10 @@ export class ReportsService {
       lon: dto.lon,
       positionOnRoute: dto.positionOnRoute,
       lanesBlocked: dto.lanesBlocked ?? 0,
-      reportedBy: dto.reportedBy,
     };
 
     if (dto.routeId) data.route = { id: dto.routeId } as any;
+    if (dto.reportedBy) data.reporter = { id: dto.reportedBy } as any;
     if (dto.endTime) data.endTime = new Date(dto.endTime);
 
     const report = this.reportRepository.create(data);
@@ -39,7 +39,8 @@ export class ReportsService {
 
   async findAll(query: QueryReportsDto): Promise<Report[]> {
     const qb = this.reportRepository.createQueryBuilder('report')
-      .leftJoinAndSelect('report.route', 'route');
+      .leftJoinAndSelect('report.route', 'route')
+      .leftJoinAndSelect('report.reporter', 'reporter');
 
     if (query.type) qb.andWhere('report.type = :type', { type: query.type });
     if (query.severity) qb.andWhere('report.severity = :severity', { severity: query.severity });
@@ -63,7 +64,7 @@ export class ReportsService {
 
   async findAllSimple(): Promise<Report[]> {
     return this.reportRepository.find({
-      relations: { route: true },
+      relations: { reporter: true },
       order: { createdAt: 'DESC' },
     });
   }
@@ -71,7 +72,7 @@ export class ReportsService {
   async findById(id: string): Promise<Report> {
     const report = await this.reportRepository.findOne({
       where: { id },
-      relations: { route: true },
+      relations: { reporter: true, route: true },
     });
     if (!report) throw new NotFoundException('Signalement non trouvé');
     return report;

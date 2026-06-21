@@ -9,6 +9,7 @@ import { RouteIntersectionsModule } from './route-intersections/route-intersecti
 import { SimulationScenariosModule } from './simulation-scenarios/simulation-scenarios.module';
 import { SimulationRouteConfigsModule } from './simulation-route-configs/simulation-route-configs.module';
 import { SimulationResultsModule } from './simulation-results/simulation-results.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { SimulationResultsModule } from './simulation-results/simulation-results
     SimulationScenariosModule,
     SimulationRouteConfigsModule,
     SimulationResultsModule,
+    UsersModule,
   ],
 })
 export class AppModule {}

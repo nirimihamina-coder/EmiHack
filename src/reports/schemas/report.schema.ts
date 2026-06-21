@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, Index, JoinColumn } from 'typeorm';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Route } from '../../routes/route.entity';
+import { User } from '../../users/user.entity';
 
 @Entity()
 @Index(['status', 'startTime'])
@@ -46,9 +47,10 @@ export class Report {
   @Column({ type: 'int', default: 0 })
   lanesBlocked!: number;
 
-  @ApiPropertyOptional({ description: "ID de l'utilisateur qui a signalé", example: '550e8400-e29b-41d4-a716-446655440000' })
-  @Column({ nullable: true })
-  reportedBy?: string;
+  @ApiPropertyOptional({ description: 'Utilisateur qui a signalé', type: () => User })
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'reported_by' })
+  reporter?: User;
 
   @ApiProperty({ description: 'Date de début', example: '2026-06-21T10:00:00.000Z' })
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
