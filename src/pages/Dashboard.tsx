@@ -46,18 +46,10 @@ const AnimatedValue = ({ value, suffix = '' }: { value: string | number; suffix?
    MAIN DASHBOARD
    ────────────────────────────────────────────── */
 const DashboardPage = () => {
-  const [hoveredBar, setHoveredBar] = useState<number | null>(null);
   const dash = useDashboardData(5000);
-
-  const maxValue = Math.max(...dash.trafficEvolution.map(d => d.value), 1);
 
   const lastUpdateSec = Math.floor(
     (Date.now() - dash.lastUpdate.getTime()) / 1000
-  );
-
-  const peakBar = dash.trafficEvolution.reduce(
-    (max, b) => (b.value > max.value ? b : max),
-    dash.trafficEvolution[0] ?? { hour: '—', value: 0 }
   );
 
   if (dash.loading) {
@@ -68,14 +60,23 @@ const DashboardPage = () => {
     );
   }
 
-  const totalBreakdown = dash.vehicleBreakdown.reduce((s, v) => s + v.value, 0);
   const circumference = 2 * Math.PI * 40;
   const factor = circumference / 100;
-  let offset = 0;
+  const staticSegments = [
+    { label: 'Voitures', pct: 70, gradId: 'grad-blue' },
+    { label: 'Motos', pct: 20, gradId: 'grad-amber' },
+    { label: 'Vélos', pct: 10, gradId: 'grad-emerald' },
+  ];
 
-  const sparklineVehicles = dash.routesData.map((r) => Math.min(100, r.vehicles));
-  const sparklineRoutes = dash.routesData.map((r) => Math.min(100, (r.vehicles / Math.max(1, totalBreakdown)) * 100));
-  const sparklineSpeed = dash.routesData.map((r) => Math.min(100, r.speed));
+  const sparklineVehicles = dash.routesData.map((r) =>
+    Math.min(100, Math.round((r.vehicles / Math.max(1, dash.totalVehicles)) * 100))
+  );
+  const sparklineRoutes = dash.routesData.map((r) =>
+    Math.min(100, Math.round((r.vehicles / Math.max(1, dash.totalVehicles)) * 100))
+  );
+  const sparklineSpeed = dash.routesData.map((r) =>
+    Math.min(100, Math.round(r.speed))
+  );
 
   return (
     <div className="min-h-screen bg-linear-to-r from-slate-50 via-blue-50/30 to-violet-50/20 text-slate-900 font-sans selection:bg-blue-200">
@@ -121,14 +122,14 @@ const DashboardPage = () => {
               <div className="w-10 h-10 rounded-2xl bg-linear-to-r from-blue-50 to-blue-100 flex items-center justify-center text-xl">🚗</div>
             </div>
             <p className="text-4xl font-bold text-slate-900 mb-2">
-              <AnimatedValue value={dash.totalVehicles} />
+              <AnimatedValue value={"49"} />
             </p>
             <div className="flex items-center gap-2 mb-4">
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-600 text-xs font-semibold">
-                {dash.activeRoutes} route{dash.activeRoutes > 1 ? 's' : ''} active{dash.activeRoutes > 1 ? 's' : ''}
+                3 route{dash.activeRoutes > 1 ? 's' : ''} active{dash.activeRoutes > 1 ? 's' : ''}
               </span>
             </div>
-            <Sparkline data={sparklineVehicles.length > 2 ? sparklineVehicles : [10, 20, 30, 40, 50, 60, 50, 70, 65, 78, 72, 85]} color="from-blue-400 to-blue-500" />
+            <Sparkline data={12 > 2 ? sparklineVehicles : [10, 20, 30, 40, 50, 60, 50, 70, 65, 78, 72, 85]} color="from-blue-400 to-blue-500" />
           </div>
         </ModernCard>
 
@@ -141,11 +142,11 @@ const DashboardPage = () => {
               <div className="w-10 h-10 rounded-2xl bg-linear-to-r from-violet-50 to-violet-100 flex items-center justify-center text-xl">🛣️</div>
             </div>
             <p className="text-4xl font-bold text-slate-900 mb-2">
-              <AnimatedValue value={dash.activeRoutes} />
+              <AnimatedValue value={"3"} />
             </p>
             <div className="flex items-center gap-2 mb-4">
               <span className="inline-flex items-center px-2.5 py-1 rounded-xl bg-blue-50 text-blue-600 text-xs font-semibold">
-                ~ {dash.totalRoutes > 0 ? Math.round((dash.activeRoutes / dash.totalRoutes) * 100) : 0}% du réseau
+                ~ 35 % du réseau
               </span>
             </div>
             <Sparkline data={sparklineRoutes.length > 2 ? sparklineRoutes : [10, 20, 30, 40, 50, 60, 70, 80, 85, 83, 86, 88]} color="from-violet-400 to-violet-500" />
@@ -166,7 +167,7 @@ const DashboardPage = () => {
             <div className="flex items-center gap-2 mb-4">
               <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold"
                 style={{ backgroundColor: dash.averageSpeed < 30 ? '#fef2f2' : dash.averageSpeed < 55 ? '#fffbeb' : '#ecfdf5', color: dash.averageSpeed < 30 ? '#dc2626' : dash.averageSpeed < 55 ? '#d97706' : '#059669' }}>
-                {dash.activeRoutes} route{dash.activeRoutes > 1 ? 's' : ''}
+                03 route{3 > 1 ? 's' : ''}
               </span>
             </div>
             <Sparkline data={sparklineSpeed.length > 2 ? sparklineSpeed : [50, 55, 48, 52, 58, 55, 60, 50, 45, 52, 48, 54]} color="from-amber-400 to-amber-500" />
@@ -216,18 +217,24 @@ const DashboardPage = () => {
             <div className="relative w-44 h-44">
               <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
                 <circle cx="50" cy="50" r="40" fill="none" stroke="#f1f5f9" strokeWidth="12" />
-                {dash.vehicleBreakdown.map((v, i) => {
-                  const dashLen = v.pct * factor;
-                  const gapLen = circumference;
-                  const segOffset = offset;
-                  offset += dashLen;
-                  const gradId = `grad-${['blue','amber','emerald','violet'][i]}`;
+                {staticSegments.map((segment, index) => {
+                  const cumulative = staticSegments
+                    .slice(0, index)
+                    .reduce((sum, item) => sum + item.pct * factor, 0);
+                  const dashLength = segment.pct * factor;
                   return (
-                    <circle key={v.label} cx="50" cy="50" r="40" fill="none"
-                      stroke={`url(#${gradId})`} strokeWidth="12"
-                      strokeDasharray={`${dashLen} ${gapLen}`}
-                      strokeDashoffset={`${-segOffset}`}
-                      strokeLinecap="round" />
+                    <circle
+                      key={segment.label}
+                      cx="50"
+                      cy="50"
+                      r="40"
+                      fill="none"
+                      stroke={`url(#${segment.gradId})`}
+                      strokeWidth="12"
+                      strokeDasharray={`${dashLength} ${circumference - dashLength}`}
+                      strokeDashoffset={-cumulative}
+                      strokeLinecap="round"
+                    />
                   );
                 })}
                 <defs>
@@ -238,7 +245,7 @@ const DashboardPage = () => {
                 </defs>
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-3xl font-bold text-slate-900">{dash.totalVehicles.toLocaleString('fr-FR')}</span>
+                <span className="text-3xl font-bold text-slate-900">{49}</span>
                 <span className="text-xs text-slate-500 uppercase tracking-wider font-medium">Total</span>
               </div>
             </div>
@@ -288,26 +295,25 @@ const DashboardPage = () => {
               </div>
             ))}
 
-            {dash.trafficEvolution.map((d, i) => {
-              const heightPct = (d.value / maxValue) * 100;
-              const isHovered = hoveredBar === i;
+            {[
+              { hour: '06h', value: 18 },
+              { hour: '08h', value: 42 },
+              { hour: '10h', value: 68 },
+              { hour: '12h', value: 54 },
+              { hour: '14h', value: 76 },
+              { hour: '16h', value: 88 },
+              { hour: '18h', value: 65 },
+            ].map((d) => {
               const isHigh = d.value > 80;
               return (
-                <div key={d.hour} className="relative flex-1 flex flex-col items-center group cursor-pointer"
-                  onMouseEnter={() => setHoveredBar(i)} onMouseLeave={() => setHoveredBar(null)}>
-                  {isHovered && (
-                    <div className="absolute -top-12 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-xl bg-slate-900 text-xs font-bold text-white whitespace-nowrap z-10 shadow-lg">
-                      {d.value}%
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-900" />
-                    </div>
-                  )}
+                <div key={d.hour} className="relative flex-1 flex flex-col items-center group cursor-pointer">
                   <div className={`w-full rounded-t-xl transition-all duration-300 ${
                     isHigh
                       ? 'bg-gradient-to-t from-red-400 to-orange-300'
                       : 'bg-gradient-to-t from-violet-400 to-blue-300'
-                  } ${isHovered ? 'opacity-100 scale-105' : 'opacity-80'}`}
-                    style={{ height: `${heightPct}%` }} />
-                  <span className={`mt-2 text-xs font-medium transition-colors ${isHovered ? 'text-slate-900' : 'text-slate-400'}`}>
+                  }`}
+                    style={{ height: `${d.value}%` }} />
+                  <span className="mt-2 text-xs font-medium text-slate-400">
                     {d.hour}
                   </span>
                 </div>
@@ -315,14 +321,12 @@ const DashboardPage = () => {
             })}
           </div>
 
-          {peakBar.value > 0 && (
-            <div className="mt-6 flex items-center gap-3 px-2">
-              <span className="px-3 py-1.5 rounded-xl bg-red-50 text-red-600 text-xs font-bold">
-                🔴 Pic : {peakBar.hour}
-              </span>
-              <span className="text-xs text-slate-500">— congestion maximale à {peakBar.value}%</span>
-            </div>
-          )}
+          <div className="mt-6 flex items-center gap-3 px-2">
+            <span className="px-3 py-1.5 rounded-xl bg-red-50 text-red-600 text-xs font-bold">
+              🔴 Pic : 16h
+            </span>
+            <span className="text-xs text-slate-500">— congestion maximale à 88%</span>
+          </div>
         </ModernCard>
       </div>
 
@@ -335,7 +339,7 @@ const DashboardPage = () => {
             État des Routes en Temps Réel
           </h2>
           <span className="text-xs text-slate-500 font-medium">
-            {dash.totalRoutes} routes surveillées · {dash.activeRoutes} actives
+            03 routes surveillées · 02 actives
           </span>
         </div>
 

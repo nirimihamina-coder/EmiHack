@@ -52,7 +52,7 @@ const Layout = () => {
 
   // Obtenir la configuration de la route actuelle
   const currentRoute = routeConfig[location.pathname] || {
-    title: "Traffic-Lab",
+    title: "Fianara'Track",
     description: 'Bienvenue sur votre espace de travail'
   };
 
