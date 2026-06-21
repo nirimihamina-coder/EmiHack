@@ -25,6 +25,7 @@ import DeviationPage from './pages/deviation/DeviationPage';
 import MapCollector from './pages/deviation/MapCollector';
 import FokontanyPage from './pages/fokontany/FokontanyPage';
 import Simulation from './pages/simulation/Simulation';
+import TrafficMap from './pages/simulation/TrafficMap';
 
 function App() {
   return (
@@ -61,6 +62,7 @@ function App() {
         <Route path="mapcollector" element={<MapCollector />} />
         <Route path="fokontany" element={<FokontanyPage />} />
         <Route path="simulation" element={<Simulation />} />
+        <Route path="traficmap" element={<TrafficMap />} />
       </Route>
     </Routes>
   );
